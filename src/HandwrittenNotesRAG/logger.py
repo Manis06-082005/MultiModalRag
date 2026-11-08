@@ -1,13 +1,16 @@
-import os 
-import logging 
+import logging
 from datetime import datetime
-log_dir="logs"
-os.makedirs(log_dir,exist_ok=True)
-log_file=f"{datetime.now().strftime('%d-%m-%Y_%H-%M-%S')}.log"
-log_file_path=os.path.join(log_dir,log_file)
+from pathlib import Path
+
+log_dir = Path("logs")
+log_dir.mkdir(exist_ok=True)
+log_file = log_dir / f"{datetime.now():%d-%m-%Y_%H-%M-%S}.log"
+
 logging.basicConfig(
-    filename=log_file_path,
-    format="[ %(asctime)s ] %(levelname)s - %(message)s",
-    level=logging.INFO
+    filename=log_file,
+    format="[ %(asctime)s ] %(levelname)s - %(name)s - %(message)s",
+    level=logging.INFO,
+    encoding="utf-8",
 )
-Logger=logging.getLogger(__file__)
+
+Logger = logging.getLogger("HandwrittenNotesRAG")
