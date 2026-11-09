@@ -17,4 +17,4 @@ def create_directories(paths:list[str])->None:
 
 
 def get_size(path:str)->float:
-    return round(os.path.getsize(path)/(1024,1024),2)
+    return round(os.path.getsize(path) / (1024 * 1024), 2)
