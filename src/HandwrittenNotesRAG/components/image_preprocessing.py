@@ -12,6 +12,7 @@ class ImagePreprocessor:
             processed_image=ImageOps.autocontrast(processed_image)
             
             if self.max_size is not None:
+                processed_image = processed_image.copy()
                 processed_image.thumbnail(
                     self.max_size,
                     Image.Resampling.LANCZOS

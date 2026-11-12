@@ -1,0 +1,15 @@
+[ 2026-11-12 14:31:55,978 ] ERROR - HandwrittenNotesRAG - PDF loading failed
+Traceback (most recent call last):
+  File "C:\Users\nathm\Desktop\HandWrittenNotes\src\HandwrittenNotesRAG\components\pdf_loader.py", line 13, in __init__
+    raise ValueError("only pdf files are supported")
+ValueError: only pdf files are supported
+[ 2026-11-12 14:31:55,980 ] ERROR - HandwrittenNotesRAG - PDF loading failed
+Traceback (most recent call last):
+  File "C:\Users\nathm\Desktop\HandWrittenNotes\src\HandwrittenNotesRAG\components\pdf_loader.py", line 11, in __init__
+    raise FileNotFoundError(f"pdf does not exist :{pdf_path}")
+FileNotFoundError: pdf does not exist :C:\Users\nathm\AppData\Local\Temp\tmpyo2x7i78\missing.pdf
+[ 2026-11-12 14:31:55,984 ] ERROR - HandwrittenNotesRAG - PDF loading failed
+Traceback (most recent call last):
+  File "C:\Users\nathm\Desktop\HandWrittenNotes\src\HandwrittenNotesRAG\components\pdf_loader.py", line 13, in __init__
+    raise ValueError("only pdf files are supported")
+ValueError: only pdf files are supported
