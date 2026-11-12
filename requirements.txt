@@ -1,13 +1,22 @@
-pinecone
+# Core ML / LLM dependencies
+accelerate>=1.15.0
+transformers>=4.57.0
 sentence-transformers
-transformers
-torch
-torchvision
+pinecone
+langchain
+numpy
+
+# Vision / document processing
 opencv-python-headless
 pillow
 pymupdf
 pytesseract
 easyocr
+torch
+torchvision
+
+# API / app runtime
 fastapi
 uvicorn[standard]
 python-dotenv
+pyyaml
