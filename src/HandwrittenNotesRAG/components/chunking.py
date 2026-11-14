@@ -7,11 +7,9 @@ from ..logger import Logger
 
 class TextChunker:
 
-    def __init__(
-        self,
-        chunk_size: int = 500,
-        chunk_overlap: int = 50
-    ) -> None:
+    def __init__(self,
+            chunk_size: int = 500,
+            chunk_overlap: int = 50 ) -> None:
 
         try:
             if chunk_size <= 0:
