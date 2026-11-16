@@ -2,6 +2,7 @@ import os
 from uuid import uuid4
 
 from pinecone import Pinecone, ServerlessSpec
+from pinecone_text.sparse import BM25Encoder
 
 from ..Exception import CustomException
 from ..logger import Logger
@@ -28,6 +29,7 @@ class PineconeStore:
 
             self.index = self.pc.Index(index_name)
             self.namespace = namespace
+            self.bm25_encoder = BM25Encoder.default()
             Logger.info("Pinecone initialized successfully!")
         except Exception as error:
             raise CustomException(error=error) from error
@@ -58,6 +60,7 @@ class PineconeStore:
                 vector = {
                     "id": str(uuid4()),
                     "values": embedding,
+                    "sparse_values": self.bm25_encoder.encode_documents(text),
                     "metadata": {
                         "text": text,
                         **meta
@@ -85,7 +88,7 @@ class PineconeStore:
     def search_embeddings(
             self,
             query_vector: list[float],
-            top_k: int = 5
+            top_k: int = 5,
     ) -> list[dict]:
             try:
                 results = self.index.query(
@@ -109,3 +112,25 @@ class PineconeStore:
             except Exception as error:
                 Logger.error("Pinecone search failed", exc_info=True)
                 raise CustomException(error) from error
+
+    def search_bm25(self, query: str, top_k: int = 5) -> list[dict]:
+        try:
+            results = self.index.query(
+                vector=[0.0] * 384,
+                sparse_vector=self.bm25_encoder.encode_queries(query),
+                top_k=top_k,
+                namespace=self.namespace,
+                include_metadata=True,
+            )
+            return [
+                {
+                    "id": match.id,
+                    "score": match.score,
+                    "text": match.metadata.get("text", ""),
+                }
+                for match in results.matches
+            ]
+        except Exception as error:
+            Logger.error("Pinecone BM25 search failed", exc_info=True)
+            raise CustomException(error) from error
+
