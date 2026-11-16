@@ -1,0 +1,23 @@
+[ 2026-11-16 09:24:14,366 ] WARNING - easyocr.easyocr - Using CPU. Note: This module is much faster with a GPU.
+[ 2026-11-16 09:24:18,995 ] INFO - HandwrittenNotesRAG - OCR model initialized successfully
+[ 2026-11-16 09:24:18,995 ] INFO - HandwrittenNotesRAG - Text chunker initialized successfully
+[ 2026-11-16 09:24:19,635 ] INFO - httpx2 - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2 "HTTP/1.1 200 OK"
+[ 2026-11-16 09:24:19,651 ] INFO - sentence_transformers.base.model - Loading SentenceTransformer model from sentence-transformers/all-MiniLM-L6-v2.
+[ 2026-11-16 09:24:20,706 ] INFO - httpx2 - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+[ 2026-11-16 09:24:20,996 ] INFO - httpx2 - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+[ 2026-11-16 09:24:21,450 ] INFO - httpx2 - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/2_Normalize/config.json "HTTP/1.1 404 Not Found"
+[ 2026-11-16 09:24:21,450 ] WARNING - huggingface_hub.utils._http - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[ 2026-11-16 09:24:21,458 ] INFO - HandwrittenNotesRAG - Embedding Model initialized successfully!
+[ 2026-11-16 09:24:21,588 ] INFO - HandwrittenNotesRAG - PDF loaded successfully
+[ 2026-11-16 09:24:21,589 ] INFO - HandwrittenNotesRAG - Text cleaning completed
+[ 2026-11-16 09:24:21,589 ] INFO - HandwrittenNotesRAG - Text cleaning completed
+[ 2026-11-16 09:24:21,589 ] INFO - HandwrittenNotesRAG - Text cleaning completed
+[ 2026-11-16 09:24:21,590 ] INFO - HandwrittenNotesRAG - Text cleaning completed
+[ 2026-11-16 09:24:21,590 ] INFO - HandwrittenNotesRAG - Text cleaning completed
+[ 2026-11-16 09:24:21,591 ] INFO - HandwrittenNotesRAG - Text chunking completed
+[ 2026-11-16 09:24:21,591 ] INFO - HandwrittenNotesRAG - Text chunking completed
+[ 2026-11-16 09:24:21,592 ] INFO - HandwrittenNotesRAG - Text chunking completed
+[ 2026-11-16 09:24:21,592 ] INFO - HandwrittenNotesRAG - Text chunking completed
+[ 2026-11-16 09:24:21,592 ] INFO - HandwrittenNotesRAG - Text chunking completed
+[ 2026-11-16 09:24:26,602 ] INFO - pinecone.client.indexes - Describing index 'handwritten-notes-rag'
+[ 2026-11-16 09:24:28,483 ] INFO - httpx - HTTP Request: GET https://api.pinecone.io/indexes/handwritten-notes-rag "HTTP/1.1 404 Not Found"

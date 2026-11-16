@@ -1,35 +1,71 @@
 import os
 from uuid import uuid4
-from pinecone import Pinecone
+
+from pinecone import Pinecone, ServerlessSpec
+
 from ..Exception import CustomException
 from ..logger import Logger
+
+
 class PineconeStore:
-    def __init__(self,namespace:str='Handwritten-rag')->None:
+    def __init__(self, namespace: str = 'Handwritten-rag') -> None:
         try:
-            api_key=os.getenv("PINECONE_API_KEY")
-            index_name=os.getenv("PINECONE_INDEX_NAME")
+            api_key = os.getenv("PINECONE_API_KEY")
+            index_name = os.getenv("PINECONE_INDEX_NAME")
             if not api_key or not index_name:
                 raise ValueError('Pinecone credentials are missing')
-            self.pc=Pinecone(api_key=api_key)
-            self.index=self.pc.Pinecone(index_name)
-            self.namespace=namespace
-            Logger.info("Pincone initialized successfully!")
+
+            self.pc = Pinecone(api_key=api_key)
+
+            if not self.pc.has_index(index_name):
+                Logger.warning("Pinecone index '%s' not found. Creating it.", index_name)
+                self.pc.create_index(
+                    name=index_name,
+                    dimension=384,
+                    metric="cosine",
+                    spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+                )
+
+            self.index = self.pc.Index(index_name)
+            self.namespace = namespace
+            Logger.info("Pinecone initialized successfully!")
         except Exception as error:
             raise CustomException(error=error) from error
-    def store_embeddings(self,embeddings:list[list[float]],texts:list[str])->None:
+    
+    def store_embeddings(
+        self,
+        embeddings: list[list[float]],
+        texts: list[str],
+        metadata: list[dict] | None = None
+    ) -> None:
+
         try:
-            if len(embeddings)!=len(text):
-                raise ValueError("Embeddings length should be equal to len of text")
-            vectors=[]
-            for embedding,text in zip(embeddings,texts):
-                vector={
-                    "id":str(uuid4()),
-                    "values":embedding,
-                    "metadata":{
-                        'text':text
+            if len(embeddings) != len(texts):
+                raise ValueError("Embeddings and texts must have equal lengths")
+
+            if metadata is None:
+                metadata = [{} for _ in texts]
+
+            if len(metadata) != len(texts):
+                raise ValueError("Metadata and texts must have equal lengths")
+
+            vectors = []
+
+            for embedding, text, meta in zip(
+                embeddings, texts, metadata
+            ):
+
+                vector = {
+                    "id": str(uuid4()),
+                    "values": embedding,
+                    "metadata": {
+                        "text": text,
+                        **meta
                     }
                 }
+
                 vectors.append(vector)
+
             if not vectors:
                 return
 
@@ -37,6 +73,7 @@ class PineconeStore:
                 vectors=vectors,
                 namespace=self.namespace
             )
+
             Logger.info(
                 f"Stored {response.upserted_count} vectors in Pinecone"
             )
@@ -44,5 +81,31 @@ class PineconeStore:
         except Exception as error:
             Logger.error("Failed to store embeddings", exc_info=True)
             raise CustomException(error) from error
-        
-            
+
+    def search_embeddings(
+            self,
+            query_vector: list[float],
+            top_k: int = 5
+    ) -> list[dict]:
+            try:
+                results = self.index.query(
+                    vector=query_vector,
+                    top_k=top_k,
+                    namespace=self.namespace,
+                    include_metadata=True
+                )
+                matches = []
+
+                for match in results.matches:
+                    matches.append({
+                        "id": match.id,
+                        "score": match.score,
+                        "text": match.metadata.get("text", "")
+                    })
+
+                Logger.info("Pinecone search completed")
+                return matches
+
+            except Exception as error:
+                Logger.error("Pinecone search failed", exc_info=True)
+                raise CustomException(error) from error

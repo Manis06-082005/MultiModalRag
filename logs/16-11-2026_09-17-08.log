@@ -1,0 +1,31 @@
+[ 2026-11-16 09:17:39,418 ] WARNING - easyocr.easyocr - Using CPU. Note: This module is much faster with a GPU.
+[ 2026-11-16 09:17:39,437 ] WARNING - easyocr.easyocr - Downloading detection model, please wait. This may take several minutes depending upon your network connection.
+[ 2026-11-16 09:18:02,066 ] ERROR - HandwrittenNotesRAG - OCR initialization failed
+Traceback (most recent call last):
+  File "C:\Users\nathm\Desktop\HandWrittenNotes\src\HandwrittenNotesRAG\components\ocr_extractor.py", line 17, in __init__
+    self.reader = easyocr.Reader(
+                  ~~~~~~~~~~~~~~^
+        languages,
+        ^^^^^^^^^^
+        gpu=False
+        ^^^^^^^^^
+    )
+    ^
+  File "C:\Users\nathm\Desktop\HandWrittenNotes\.venv\Lib\site-packages\easyocr\easyocr.py", line 92, in __init__
+    detector_path = self.getDetectorPath(detect_network)
+  File "C:\Users\nathm\Desktop\HandWrittenNotes\.venv\Lib\site-packages\easyocr\easyocr.py", line 253, in getDetectorPath
+    download_and_unzip(self.detection_models[self.detect_network]['url'], self.detection_models[self.detect_network]['filename'], self.model_storage_directory, self.verbose)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\nathm\Desktop\HandWrittenNotes\.venv\Lib\site-packages\easyocr\utils.py", line 628, in download_and_unzip
+    urlretrieve(url, zip_path, reporthook=reporthook)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\urllib\request.py", line 247, in urlretrieve
+    reporthook(blocknum, bs, size)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\nathm\Desktop\HandWrittenNotes\.venv\Lib\site-packages\easyocr\utils.py", line 728, in progress_hook
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end='')
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\ProgramData\anaconda3\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2588' in position 12: character maps to <undefined>

@@ -1,0 +1,15 @@
+[ 2026-11-16 09:18:59,520 ] WARNING - easyocr.easyocr - Using CPU. Note: This module is much faster with a GPU.
+[ 2026-11-16 09:18:59,542 ] WARNING - easyocr.easyocr - Downloading detection model, please wait. This may take several minutes depending upon your network connection.
+[ 2026-11-16 09:19:34,128 ] INFO - easyocr.easyocr - Download complete
+[ 2026-11-16 09:19:34,128 ] WARNING - easyocr.easyocr - Downloading recognition model, please wait. This may take several minutes depending upon your network connection.
+[ 2026-11-16 09:19:59,061 ] INFO - easyocr.easyocr - Download complete.
+[ 2026-11-16 09:20:03,246 ] INFO - HandwrittenNotesRAG - OCR model initialized successfully
+[ 2026-11-16 09:20:03,246 ] INFO - HandwrittenNotesRAG - Text chunker initialized successfully
+[ 2026-11-16 09:20:03,966 ] INFO - httpx2 - HTTP Request: GET https://huggingface.co/api/agent-harnesses "HTTP/1.1 200 OK"
+[ 2026-11-16 09:20:04,316 ] INFO - httpx2 - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2 "HTTP/1.1 200 OK"
+[ 2026-11-16 09:20:04,372 ] INFO - sentence_transformers.base.model - Loading SentenceTransformer model from sentence-transformers/all-MiniLM-L6-v2.
+[ 2026-11-16 09:20:05,864 ] INFO - httpx2 - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+[ 2026-11-16 09:20:06,140 ] INFO - httpx2 - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+[ 2026-11-16 09:20:06,605 ] INFO - httpx2 - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/2_Normalize/config.json "HTTP/1.1 404 Not Found"
+[ 2026-11-16 09:20:06,612 ] INFO - HandwrittenNotesRAG - Embedding Model initialized successfully!
+[ 2026-11-16 09:20:06,701 ] INFO - HandwrittenNotesRAG - PDF loaded successfully

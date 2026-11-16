@@ -1,0 +1,21 @@
+[ 2026-11-16 09:23:24,436 ] WARNING - easyocr.easyocr - Using CPU. Note: This module is much faster with a GPU.
+[ 2026-11-16 09:23:27,369 ] INFO - HandwrittenNotesRAG - OCR model initialized successfully
+[ 2026-11-16 09:23:27,369 ] INFO - HandwrittenNotesRAG - Text chunker initialized successfully
+[ 2026-11-16 09:23:28,034 ] INFO - httpx2 - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2 "HTTP/1.1 200 OK"
+[ 2026-11-16 09:23:28,044 ] INFO - sentence_transformers.base.model - Loading SentenceTransformer model from sentence-transformers/all-MiniLM-L6-v2.
+[ 2026-11-16 09:23:28,781 ] INFO - httpx2 - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+[ 2026-11-16 09:23:29,063 ] INFO - httpx2 - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+[ 2026-11-16 09:23:29,412 ] INFO - httpx2 - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/2_Normalize/config.json "HTTP/1.1 404 Not Found"
+[ 2026-11-16 09:23:29,412 ] WARNING - huggingface_hub.utils._http - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[ 2026-11-16 09:23:29,416 ] INFO - HandwrittenNotesRAG - Embedding Model initialized successfully!
+[ 2026-11-16 09:23:29,472 ] INFO - HandwrittenNotesRAG - PDF loaded successfully
+[ 2026-11-16 09:23:29,473 ] INFO - HandwrittenNotesRAG - Text cleaning completed
+[ 2026-11-16 09:23:29,473 ] INFO - HandwrittenNotesRAG - Text cleaning completed
+[ 2026-11-16 09:23:29,473 ] INFO - HandwrittenNotesRAG - Text cleaning completed
+[ 2026-11-16 09:23:29,473 ] INFO - HandwrittenNotesRAG - Text cleaning completed
+[ 2026-11-16 09:23:29,474 ] INFO - HandwrittenNotesRAG - Text cleaning completed
+[ 2026-11-16 09:23:29,474 ] INFO - HandwrittenNotesRAG - Text chunking completed
+[ 2026-11-16 09:23:29,474 ] INFO - HandwrittenNotesRAG - Text chunking completed
+[ 2026-11-16 09:23:29,474 ] INFO - HandwrittenNotesRAG - Text chunking completed
+[ 2026-11-16 09:23:29,474 ] INFO - HandwrittenNotesRAG - Text chunking completed
+[ 2026-11-16 09:23:29,474 ] INFO - HandwrittenNotesRAG - Text chunking completed
