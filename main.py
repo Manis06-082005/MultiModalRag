@@ -62,6 +62,7 @@ def main():
     embedding_model = EmbeddingGenerator()
 
     all_text = []
+    all_sources = []
 
     # Process PDF files
     for pdf_path in pdf_files:
@@ -86,6 +87,7 @@ def main():
 
             if extracted_text.strip():
                 all_text.append(extracted_text)
+                all_sources.append({"source": pdf_path.name, "page": page.get("page_number") or page.get("page")})
 
     # Process image files
     for image_path in image_files:
@@ -99,6 +101,7 @@ def main():
 
         if extracted_text.strip():
             all_text.append(extracted_text)
+            all_sources.append({"source": image_path.name})
 
     if not all_text:
         print("No text extracted from the files.")
@@ -113,8 +116,11 @@ def main():
     # Split text into chunks
     all_chunks = []
 
-    for text in cleaned_text:
-        all_chunks.extend(chunker.split_text(text))
+    chunk_metadata = []
+    for text, source in zip(cleaned_text, all_sources):
+        chunks = chunker.split_text(text)
+        all_chunks.extend(chunks)
+        chunk_metadata.extend([source] * len(chunks))
 
     print(f"Total chunks created: {len(all_chunks)}")
 
@@ -132,7 +138,8 @@ def main():
 
     pinecone_store.store_embeddings(
         embeddings=embeddings,
-        texts=all_chunks
+        texts=all_chunks,
+        metadata=chunk_metadata,
     )
 
     print("All files processed and stored successfully!")

@@ -5,6 +5,7 @@ sentence-transformers
 pinecone
 pinecone-text>=0.11.0
 langchain
+langchain-groq>=1.1.0
 numpy
 
 # Vision / document processing

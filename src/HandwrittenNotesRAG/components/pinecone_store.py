@@ -103,7 +103,7 @@ class PineconeStore:
                     matches.append({
                         "id": match.id,
                         "score": match.score,
-                        "text": match.metadata.get("text", "")
+                        **dict(match.metadata or {}),
                     })
 
                 Logger.info("Pinecone search completed")
@@ -126,7 +126,7 @@ class PineconeStore:
                 {
                     "id": match.id,
                     "score": match.score,
-                    "text": match.metadata.get("text", ""),
+                    **dict(match.metadata or {}),
                 }
                 for match in results.matches
             ]
