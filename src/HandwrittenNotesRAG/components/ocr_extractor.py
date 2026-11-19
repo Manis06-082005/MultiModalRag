@@ -1,6 +1,9 @@
 
 import easyocr
+import numpy as np
 from PIL import Image
+from numpy.typing import NDArray
+from typing import Any
 
 from ..Exception import CustomException
 from ..logger import Logger
@@ -10,12 +13,12 @@ class OCRExtractor:
 
     def __init__(
         self,
-        languages: list[str] = ["en"]
+        languages: tuple[str, ...] = ("en",)
     ) -> None:
 
         try:
             self.reader = easyocr.Reader(
-                languages,
+                list(languages),
                 gpu=False
             )
 
@@ -25,11 +28,20 @@ class OCRExtractor:
             Logger.error("OCR initialization failed", exc_info=True)
             raise CustomException(error) from error
 
-    def extract_text(self, image: Image.Image) -> str:
+    def extract_text(
+        self,
+        image: Image.Image | NDArray[Any]
+    ) -> str:
 
         try:
+            image_array: NDArray[Any]
+            if isinstance(image, Image.Image):
+                image_array = np.asarray(image.convert("RGB"))
+            else:
+                image_array = image
+
             results = self.reader.readtext(
-                image,
+                image_array,
                 detail=1,
                 paragraph=False
             )
@@ -37,11 +49,16 @@ class OCRExtractor:
             extracted_text = []
 
             for result in results:
-                text = result[1]
-                confidence = result[2]#(bounding_box, recognized_text, confidence)
+                if isinstance(result, (tuple, list)) and len(result) >= 3:
+                    text = result[1]
+                    confidence = result[2]
 
-                if confidence >= 0.30:
-                    extracted_text.append(text)
+                    if (
+                        isinstance(text, str)
+                        and isinstance(confidence, (int, float))
+                        and confidence >= 0.30
+                    ):
+                        extracted_text.append(text)
 
             final_text = "\n".join(extracted_text)
 

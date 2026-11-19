@@ -23,11 +23,17 @@ class PDFLoader:
 
             with pymupdf.open(pdf_path) as pdf:
 
-                for page in pdf:
-                    page_text = page.get_text().strip()
+                for page_number in range(1, len(pdf) + 1):
+                    page = pdf[page_number - 1]
+                    page_text_result = page.get_text("text")
+                    page_text = (
+                        page_text_result.strip()
+                        if isinstance(page_text_result, str)
+                        else ""
+                    )
 
                     page_data = {
-                        "page_number": page.number + 1,
+                        "page_number": page_number,
                         "text": page_text,
                         "image": None
                     }

@@ -11,6 +11,7 @@ from ..components.ocr_extractor import OCRExtractor
 from ..components.pdf_loader import PDFLoader
 from ..components.pinecone_store import PineconeStore
 from ..components.text_cleaner import TextCleaner
+from ..components.vision_extractor import VisionExtractor
 from ..logger import Logger
 
 
@@ -27,6 +28,7 @@ class IngestionPipeline:
         chunker: TextChunker | None = None,
         embedding_model: EmbeddingGenerator | None = None,
         vector_store: PineconeStore | None = None,
+        vision_extractor: VisionExtractor | None = None,
     ) -> None:
         self.pdf_loader = pdf_loader or PDFLoader()
         self.image_loader = image_loader or ImageLoader()
@@ -36,6 +38,17 @@ class IngestionPipeline:
         self.chunker = chunker or TextChunker()
         self.embedding_model = embedding_model or EmbeddingGenerator()
         self.vector_store = vector_store
+        self.vision_extractor = vision_extractor
+
+    def _extract_image_text(self, image) -> str:
+        """Run OCR and, when configured, append a visual description."""
+        processed_image = self.preprocessor.preprocess(image)
+        extracted = self.ocr.extract_text(processed_image).strip()
+        if self.vision_extractor is not None:
+            description = self.vision_extractor.extract_description(image).strip()
+            if description:
+                extracted = f"{extracted}\n\nVisual description: {description}".strip()
+        return extracted
 
     def ingest(self, pdf_dir: str | Path, image_dir: str | Path) -> dict[str, int]:
         """Ingest files in the two input directories and return processing counts."""
@@ -58,8 +71,7 @@ class IngestionPipeline:
             for page in self.pdf_loader.load_pdf(pdf_path):
                 text = page.get("text", "")
                 if not text.strip() and page.get("image") is not None:
-                    image = self.preprocessor.preprocess(page["image"])
-                    text = self.ocr.extract_text(image)
+                    text = self._extract_image_text(page["image"])
                 if text and text.strip():
                     records.append((text, {
                         "source": pdf_path.name,
@@ -68,8 +80,8 @@ class IngestionPipeline:
 
         for image_path in image_files:
             Logger.info("Processing image: %s", image_path.name)
-            image = self.preprocessor.preprocess(self.image_loader.load(image_path))
-            text = self.ocr.extract_text(image)
+            image = self.image_loader.load(image_path)
+            text = self._extract_image_text(image)
             if text and text.strip():
                 records.append((text, {"source": image_path.name}))
 
