@@ -9,7 +9,7 @@ uses Groq to generate answers with source citations.
 
 - Python 3.12
 - [`uv`](https://docs.astral.sh/uv/)
-- Pinecone API key and an index configured for 384-dimensional cosine vectors
+- Pinecone API key
 - Groq API key
 
 ## Setup
@@ -24,7 +24,7 @@ Create a `.env` file in the project root with:
 
 ```dotenv
 PINECONE_API_KEY=your-pinecone-api-key
-PINECONE_INDEX_NAME=your-index-name
+PINECONE_INDEX_NAME=handwritten-notes-hybrid
 GROQ_API_KEY=your-groq-api-key
 GENERATOR_MODEL=openai/gpt-oss-20b
 ```
@@ -45,7 +45,18 @@ uv run python main.py
 PDF text is extracted page by page. Image-only PDF pages and image files use
 OCR. Chunks are embedded with `sentence-transformers/all-MiniLM-L6-v2` and
 stored in the configured Pinecone index. Source filename and PDF page are
-stored as metadata for citations.
+stored as metadata for citations. New indexes use dot-product similarity so
+they can support dense and BM25 sparse search. Use a **new** index name such as
+`handwritten-notes-hybrid` if your current index uses cosine similarity;
+Pinecone does not allow changing an existing index's metric in place. The
+first ingestion run creates the new 384-dimensional dot-product index. Run
+ingestion again after changing the index name to populate it with both dense
+and sparse vectors. The existing index and its data are left alone.
+
+For optional visual descriptions of diagrams, pass a `VisionExtractor` to
+`IngestionPipeline`. This loads the Qwen vision model, which may require a model
+download and additional memory. OCR remains the default when no vision
+extractor is supplied.
 
 ## Ask a question from Python
 

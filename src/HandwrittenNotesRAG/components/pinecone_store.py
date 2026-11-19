@@ -1,4 +1,5 @@
 import os
+from typing import Any, cast
 from uuid import uuid4
 
 from pinecone import Pinecone, ServerlessSpec
@@ -23,13 +24,23 @@ class PineconeStore:
                 self.pc.create_index(
                     name=index_name,
                     dimension=384,
-                    metric="cosine",
+                    metric="dotproduct",
                     spec=ServerlessSpec(cloud="aws", region="us-east-1"),
                 )
 
             self.index = self.pc.Index(index_name)
             self.namespace = namespace
             self.bm25_encoder = BM25Encoder.default()
+            description = self.pc.describe_index(index_name)
+            self.supports_sparse = getattr(description, "metric", None) == "dotproduct"
+            if not self.supports_sparse:
+                raise ValueError(
+                    f"Pinecone index '{index_name}' uses metric "
+                    f"'{getattr(description, 'metric', 'unknown')}'. Hybrid search "
+                    "requires a dotproduct index. Set PINECONE_INDEX_NAME to a "
+                    "new or existing dotproduct index, then re-ingest your notes."
+                )
+            Logger.info("Pinecone index '%s' supports hybrid dense and sparse search", index_name)
             Logger.info("Pinecone initialized successfully!")
         except Exception as error:
             raise CustomException(error=error) from error
@@ -60,12 +71,13 @@ class PineconeStore:
                 vector = {
                     "id": str(uuid4()),
                     "values": embedding,
-                    "sparse_values": self.bm25_encoder.encode_documents(text),
                     "metadata": {
                         "text": text,
                         **meta
                     }
                 }
+                if self.supports_sparse:
+                    vector["sparse_values"] = self.bm25_encoder.encode_documents(text)
 
                 vectors.append(vector)
 
@@ -115,9 +127,13 @@ class PineconeStore:
 
     def search_bm25(self, query: str, top_k: int = 5) -> list[dict]:
         try:
+            if not self.supports_sparse:
+                return []
+            encoded_query = self.bm25_encoder.encode_queries(query)
+            sparse_query = cast(dict[str, Any], encoded_query)
             results = self.index.query(
                 vector=[0.0] * 384,
-                sparse_vector=self.bm25_encoder.encode_queries(query),
+                sparse_vector=sparse_query,
                 top_k=top_k,
                 namespace=self.namespace,
                 include_metadata=True,
