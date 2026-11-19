@@ -3,7 +3,6 @@
 from langgraph.graph import END, START, StateGraph
 
 from ..components.generator import Generator
-from ..components.retriever import Retriever
 from ..pipelines.retrieval_pipeline import RetrievalPipeline
 from .nodes import RAGNodes
 from .router import route_after_retrieval
@@ -11,26 +10,32 @@ from .state import RAGState
 
 
 def build_graph(
-    retriever: Retriever | None = None,
     retrieval_pipeline: RetrievalPipeline | None = None,
     generator: Generator | None = None,
 ):
-    """Compile the retrieval -> generation graph with optional injected parts."""
+    """Compile a graph that routes invalid, no-evidence, and answerable queries."""
     nodes = RAGNodes(
-        retriever=retriever,
         retrieval_pipeline=retrieval_pipeline,
         generator=generator,
     )
     workflow = StateGraph(RAGState)
     workflow.add_node("retrieve", nodes.retrieve)
     workflow.add_node("generate", nodes.generate)
+    workflow.add_node("no_results", nodes.no_results)
+    workflow.add_node("invalid_question", nodes.invalid_question)
     workflow.add_edge(START, "retrieve")
     workflow.add_conditional_edges(
         "retrieve",
         route_after_retrieval,
-        {"generate": "generate", "end": END},
+        {
+            "generate": "generate",
+            "no_results": "no_results",
+            "invalid_question": "invalid_question",
+        },
     )
     workflow.add_edge("generate", END)
+    workflow.add_edge("no_results", END)
+    workflow.add_edge("invalid_question", END)
     return workflow.compile()
 
 
@@ -39,12 +44,10 @@ class RAGGraph:
 
     def __init__(
         self,
-        retriever: Retriever | None = None,
         retrieval_pipeline: RetrievalPipeline | None = None,
         generator: Generator | None = None,
     ) -> None:
         self.graph = build_graph(
-            retriever=retriever,
             retrieval_pipeline=retrieval_pipeline,
             generator=generator,
         )

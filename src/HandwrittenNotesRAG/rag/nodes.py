@@ -3,7 +3,6 @@
 from typing import Any
 
 from ..components.generator import Generator
-from ..components.retriever import Retriever
 from ..pipelines.retrieval_pipeline import RetrievalPipeline
 from .state import RAGState
 
@@ -13,28 +12,33 @@ class RAGNodes:
 
     def __init__(
         self,
-        retriever: Retriever | None = None,
         retrieval_pipeline: RetrievalPipeline | None = None,
         generator: Generator | None = None,
     ) -> None:
-        if retriever is not None and retrieval_pipeline is not None:
-            raise ValueError("Pass retriever or retrieval_pipeline, not both")
-        self.retriever = retriever
         self.retrieval_pipeline = retrieval_pipeline
         self.generator = generator or Generator()
 
     def retrieve(self, state: RAGState) -> dict[str, Any]:
         question = state.get("question", "")
-        if not question.strip():
+        if not isinstance(question, str) or not question.strip():
             return {"documents": [], "error": "question must be a non-empty string"}
-        if self.retrieval_pipeline is not None:
-            documents = self.retrieval_pipeline.retrieve(question)
-        elif self.retriever is not None:
-            documents = self.retriever.search(question)
-        else:
+        if self.retrieval_pipeline is None:
             self.retrieval_pipeline = RetrievalPipeline()
-            documents = self.retrieval_pipeline.retrieve(question)
+        documents = self.retrieval_pipeline.retrieve(question.strip())
         return {"documents": documents, "error": ""}
+
+    @staticmethod
+    def no_results(_: RAGState) -> dict[str, str]:
+        """Return a grounded response when retrieval found no usable passages."""
+        return {
+            "answer": "I couldn't find relevant information in your notes to answer that."
+        }
+
+    @staticmethod
+    def invalid_question(state: RAGState) -> dict[str, str]:
+        """Expose invalid input as both a user-facing answer and an error."""
+        message = state.get("error") or "question must be a non-empty string"
+        return {"answer": message, "error": message}
 
     def generate(self, state: RAGState) -> dict[str, str]:
         question = state.get("question", "")
