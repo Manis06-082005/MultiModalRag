@@ -33,6 +33,21 @@ Keep `.env` private; it is ignored by Git. The default generator model is
 `openai/gpt-oss-20b`. Set `GENERATOR_MODEL` to another model available to your
 Groq account if needed.
 
+## Run the chat app
+
+From the project root, start the FastAPI app on a local-only port:
+
+```powershell
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8765
+```
+
+Then open <http://127.0.0.1:8765/>. If Windows reports `WinError 10013`, try
+another local port, such as `--port 8080`.
+
+The chat composer streams answers from Groq as they are generated. Use the
+attachment button to upload a PDF or supported image (up to 25 MB); the app
+extracts and indexes it before you ask questions about it.
+
 ## Add and ingest notes
 
 Put PDF files in `data/raw/pdfs/` and supported images (`.jpg`, `.jpeg`, `.png`,
