@@ -1,15 +1,19 @@
 """Retrieve note passages and generate a source-grounded answer."""
 
+from __future__ import annotations
+
 import re
 import threading
 from collections.abc import Iterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from PIL import Image
 
-from ..components.generator import Generator
-from ..components.retriever import Retriever
 from ..components.web_search import TavilyWebSearch
-from .retrieval_pipeline import RetrievalPipeline
+
+if TYPE_CHECKING:
+    from ..components.generator import Generator
+    from ..components.retriever import Retriever
+    from .retrieval_pipeline import RetrievalPipeline
 
 
 def _greeting_response(question: str) -> str | None:
@@ -41,6 +45,8 @@ class RAGPipeline:
 
     def _get_generator(self) -> Generator:
         if self.generator is None:
+            from ..components.generator import Generator
+
             self.generator = Generator()
         return self.generator
 
@@ -53,6 +59,8 @@ class RAGPipeline:
             if selected_sources is None:
                 return self.retriever.search(question)
             return self.retriever.search(question, selected_sources=selected_sources)
+        from .retrieval_pipeline import RetrievalPipeline
+
         self.retrieval_pipeline = RetrievalPipeline()
         if selected_sources is None:
             return self.retrieval_pipeline.retrieve(question)
