@@ -37,7 +37,12 @@ class RAGPipeline:
         self.retrieval_pipeline = retrieval_pipeline
         self.retriever = retriever
         self.web_searcher = web_searcher or TavilyWebSearch()
-        self.generator = generator or Generator()
+        self.generator = generator
+
+    def _get_generator(self) -> Generator:
+        if self.generator is None:
+            self.generator = Generator()
+        return self.generator
 
     def _retrieve(self, question: str, selected_sources: list[str] | None = None) -> list[dict[str, Any]]:
         if self.retrieval_pipeline is not None:
@@ -74,7 +79,7 @@ class RAGPipeline:
             passages.extend(self.web_searcher.search(clean_question))
         if image is not None:
             passages = [*passages, {"text": "Image supplied directly to the vision model.", "source": "Attached image"}]
-        answer = self.generator.generate(
+        answer = self._get_generator().generate(
             clean_question,
             passages,
             image=image,
@@ -110,7 +115,7 @@ class RAGPipeline:
             passages.extend(self.web_searcher.search(clean_question))
         if image is not None:
             passages = [*passages, {"text": "Image supplied directly to the vision model.", "source": "Attached image"}]
-        for token in self.generator.stream(
+        for token in self._get_generator().stream(
             clean_question,
             passages,
             image=image,

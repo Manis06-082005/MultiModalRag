@@ -1,6 +1,7 @@
 """FastAPI application and first connected chat interface."""
 
 import sys
+import os
 import json
 import base64
 import binascii
@@ -1152,4 +1153,10 @@ def _decode_image(request: QueryRequest):
 @app.get("/health", tags=["system"])
 def health_check() -> dict[str, str]:
     """Report that the API process is running."""
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "groq_configured": "true" if os.getenv("GROQ_API_KEY") else "false",
+        "pinecone_configured": "true" if os.getenv("PINECONE_API_KEY") and os.getenv("PINECONE_INDEX_NAME") else "false",
+        "openrouter_configured": "true" if os.getenv("OPENROUTER_API_KEY") else "false",
+        "tavily_configured": "true" if os.getenv("TAVILY_API_KEY") else "false",
+    }
