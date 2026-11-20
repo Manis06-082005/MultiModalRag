@@ -102,6 +102,9 @@ class IngestionPipeline:
             raise ValueError("Embedding count does not match chunk count")
 
         store = self.vector_store or PineconeStore()
+        delete_sources = getattr(store, "delete_by_sources", None)
+        if callable(delete_sources):
+            delete_sources(sorted({str(item.get("source")) for item in metadata if item.get("source")}))
         store.store_embeddings(embeddings=embeddings, texts=chunks, metadata=metadata)
         Logger.info("Ingested %d chunks from %d source documents", len(chunks), len(records))
         return {

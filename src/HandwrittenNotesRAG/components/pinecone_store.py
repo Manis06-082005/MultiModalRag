@@ -97,6 +97,20 @@ class PineconeStore:
             Logger.error("Failed to store embeddings", exc_info=True)
             raise CustomException(error) from error
 
+    def delete_by_sources(self, sources: list[str]) -> None:
+        """Remove older chunks for documents being re-ingested."""
+        if not sources:
+            return
+        try:
+            self.index.delete(
+                filter={"source": {"$in": sources}},
+                namespace=self.namespace,
+            )
+            Logger.info("Removed existing vectors for %d source document(s)", len(sources))
+        except Exception as error:
+            Logger.error("Failed to remove older source vectors", exc_info=True)
+            raise CustomException(error) from error
+
     def search_embeddings(
             self,
             query_vector: list[float],
