@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 def _greeting_response(question: str) -> str | None:
     if re.fullmatch(
-        r"(?:hi|hello|hey|hiya|good morning|good afternoon|good evening)(?: there)?[.!?]*",
+        r"(?:h+i+|hello|hey|hiya|good morning|good afternoon|good evening)(?: there)?[.!?]*",
         question.strip(),
         flags=re.IGNORECASE,
     ):
