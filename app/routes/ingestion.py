@@ -1,13 +1,16 @@
 """PDF and image upload and background-ingestion endpoints."""
 
 import shutil
+import mimetypes
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Literal
+from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
@@ -32,6 +35,13 @@ class IngestionJob(BaseModel):
     status: Literal["queued", "processing", "completed", "failed"]
     result: dict[str, int] | None = None
     error: str | None = None
+
+
+class DocumentInfo(BaseModel):
+    filename: str
+    kind: Literal["pdf", "image"]
+    status: Literal["queued", "processing", "indexed", "failed"]
+    preview_url: str
 
 
 async def _save_upload(upload: UploadFile, destination: Path, is_pdf: bool) -> None:
@@ -133,6 +143,77 @@ async def upload_document(
         _jobs[job_id] = job
     background_tasks.add_task(_ingest_upload, job_id, destination)
     return job
+
+
+@router.get("", response_model=list[DocumentInfo])
+def list_documents() -> list[DocumentInfo]:
+    """List uploaded documents and their latest in-memory indexing status."""
+    with _jobs_lock:
+        jobs_by_name = {job.filename: job for job in _jobs.values()}
+    documents: list[DocumentInfo] = []
+    for directory, kind in ((UPLOAD_DIR, "pdf"), (IMAGE_UPLOAD_DIR, "image")):
+        if not directory.exists():
+            continue
+        for path in directory.iterdir():
+            if not path.is_file() or path.name.startswith("."):
+                continue
+            if kind == "pdf" and path.suffix.lower() != ".pdf":
+                continue
+            if kind == "image" and path.suffix.lower() not in IMAGE_EXTENSIONS:
+                continue
+            job = jobs_by_name.get(path.name)
+            status = "indexed" if job is None or job.status == "completed" else job.status
+            documents.append(DocumentInfo(
+                filename=path.name,
+                kind=kind,
+                status=status,
+                preview_url=f"/api/documents/{quote(path.name, safe='')}/preview",
+            ))
+    return sorted(documents, key=lambda document: document.filename.lower())
+
+
+@router.get("/{filename}/preview")
+def preview_document(filename: str) -> FileResponse:
+    """Open an uploaded PDF or image in the browser's native viewer."""
+    candidates = (UPLOAD_DIR / filename, IMAGE_UPLOAD_DIR / filename)
+    path = next((candidate for candidate in candidates if candidate.is_file() and candidate.name == filename), None)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return FileResponse(path, media_type=media_type, filename=path.name, content_disposition_type="inline")
+
+
+def _delete_document_vectors(filename: str) -> None:
+    """Remove a deleted upload's vectors without blocking the UI response."""
+    try:
+        from HandwrittenNotesRAG.components.pinecone_store import PineconeStore
+
+        with _ingestion_lock:
+            PineconeStore().delete_by_sources([filename])
+        Logger.info("Removed search vectors for deleted document %s", filename)
+    except Exception:
+        Logger.error("Could not remove search vectors for deleted document %s", filename, exc_info=True)
+
+
+@router.delete("/{filename}")
+def delete_document(filename: str, background_tasks: BackgroundTasks) -> dict[str, str]:
+    """Remove the uploaded file now, then clean its vectors in the background."""
+    if Path(filename.replace("\\", "/")).name != filename or filename in {"", ".", ".."}:
+        raise HTTPException(status_code=400, detail="Invalid document name.")
+    candidates = [path for path in (UPLOAD_DIR / filename, IMAGE_UPLOAD_DIR / filename) if path.is_file()]
+    if not candidates:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    with _jobs_lock:
+        if any(job.filename == filename and job.status in {"queued", "processing"} for job in _jobs.values()):
+            raise HTTPException(status_code=409, detail="Wait for indexing to finish before deleting this document.")
+    try:
+        for path in candidates:
+            path.unlink(missing_ok=True)
+    except OSError as error:
+        Logger.error("Could not remove uploaded document %s", filename, exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not remove the uploaded document.") from error
+    background_tasks.add_task(_delete_document_vectors, filename)
+    return {"status": "deleted", "filename": filename}
 
 
 @router.get("/{job_id}", response_model=IngestionJob)

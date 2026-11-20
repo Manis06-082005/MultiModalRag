@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from PIL import Image, UnidentifiedImageError
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 SRC_DIR = BASE_DIR / "src"
@@ -38,6 +39,7 @@ class ConversationTurn(BaseModel):
 class QueryRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     use_notes: bool = False
+    selected_sources: list[str] | None = Field(default=None, max_length=100)
     web_search: bool = False
     history: list[ConversationTurn] = Field(default_factory=list, max_length=12)
     conversation_id: str | None = None
@@ -73,7 +75,7 @@ _stream_cancellations_lock = threading.Lock()
 def home() -> HTMLResponse:
     """Serve the chat page."""
     return HTMLResponse(
-        """
+        r"""
         <!doctype html>
         <html lang="en">
           <head>
@@ -83,15 +85,19 @@ def home() -> HTMLResponse:
             <style>
               :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #282923; background: #e9e9e1; }
               * { box-sizing: border-box; }
-              body { margin: 0; min-height: 100vh; padding: 24px; }
+              body { display: flex; flex-direction: column; height: 100vh; margin: 0; overflow: hidden; padding: 24px; }
               header { align-items: center; background: #fff; display: flex; justify-content: space-between; margin: 0 auto; max-width: 1440px; padding: 15px 22px; }
               .brand { align-items: center; display: flex; gap: 11px; }
               .logo { align-items: center; background: #657d68; border-radius: 10px; color: #fff; display: flex; font-family: Georgia,serif; font-size: 18px; height: 36px; justify-content: center; width: 36px; }
               h1 { font-family: Georgia,serif; font-size: 17px; font-weight: 500; margin: 0; }
               header p { color: #77786f; font-size: 11px; margin: 2px 0 0; }
               header a { color: #566e5b; font-size: 12px; text-decoration: none; }
-              .layout { background: #fff; border-radius: 22px; display: flex; margin: 0 auto; max-width: 1440px; min-height: calc(100vh - 72px); overflow: hidden; }
+              #menu-button { background: #f2f1eb; border: 0; border-radius: 9px; color: #526b57; cursor: pointer; display: block; flex: 0 0 36px; font-size: 18px; height: 36px; margin-right: 10px; }
+              @media (min-width: 621px) { .layout.sidebar-collapsed aside { flex-basis: 0; opacity: 0; padding-left: 0; padding-right: 0; visibility: hidden; } }
+              aside { transition: flex-basis .22s ease, opacity .18s ease, padding .22s ease; }
+              .layout { background: #fff; border-radius: 22px; display: flex; flex: 1 1 auto; margin: 0 auto; max-width: 1440px; min-height: 0; overflow: hidden; width: 100%; }
               aside { background: #f4f0e6; display: flex; flex: 0 0 290px; flex-direction: column; min-height: 0; overflow: hidden; padding: 24px 16px; }
+              aside { position: relative; }
               .side-title { color: #858277; font-size: 10px; font-weight: 600; letter-spacing: .1em; margin: 25px 0 9px; text-transform: uppercase; }
               .upload-button, .clear-button, #send { border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 600; padding: 11px 15px; transition: background .15s, transform .15s; }
               .upload-button, #send { background: #657d68; color: white; }
@@ -101,16 +107,27 @@ def home() -> HTMLResponse:
               .clear-button:hover { background: #ded9ca; }
               .upload-button:disabled, #send:disabled { cursor: wait; opacity: .6; }
               #upload-status, #status { color: #77786f; font-size: 11px; line-height: 1.5; min-height: 18px; }
-              #documents { color: #55564f; font-size: 12px; list-style: none; margin: 0; padding: 0; }
-              #documents li { border-top: 1px solid #e6e1d5; overflow-wrap: anywhere; padding: 9px 0; }
-              #conversation-list { flex: 1; list-style: none; margin: 0 -4px; min-height: 80px; overflow: auto; padding: 0 4px; }
+              #documents { color: #55564f; flex: 0 1 auto; font-size: 12px; list-style: none; margin: 0; max-height: min(36vh, 320px); min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0; scrollbar-gutter: stable; }
+              #documents li { align-items: center; border-top: 1px solid #e6e1d5; display: flex; gap: 5px; overflow-wrap: anywhere; padding: 7px 0; }
+              .document-select { accent-color: #657d68; flex: 0 0 auto; }
+              .document-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+              .document-status { color: #85867e; flex-basis: 100%; font-size: 10px; }
+              .document-entry { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+              .document-action, .conversation-action { background: transparent; border: 0; border-radius: 7px; color: #74766e; cursor: pointer; flex: 0 0 auto; font: inherit; font-size: 11px; padding: 6px; }
+              .document-action:hover, .conversation-action:hover { background: #e9e5da; color: #354b3a; }
+              #conversation-search { background: #fffefa; border: 1px solid #e5e1d7; border-radius: 9px; color: inherit; font: inherit; font-size: 12px; margin: 0 0 6px; outline: none; padding: 9px 10px; width: 100%; }
+              #conversation-search:focus { border-color: #9baa96; }
+              #conversation-list { flex: 1 1 0; list-style: none; margin: 0 -4px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 4px; scrollbar-gutter: stable; }
               #conversation-list li { margin: 3px 0; }
-              #conversation-list button { background: transparent; border: 0; border-radius: 10px; color: #4e514a; cursor: pointer; display: flex; font: inherit; font-size: 13px; overflow: hidden; padding: 11px 12px; text-align: left; text-overflow: ellipsis; transition: background .16s, transform .16s; white-space: nowrap; width: 100%; }
+              .conversation-row { align-items: center; display: flex; gap: 2px; }
+              #conversation-list button.conversation-open { background: transparent; border: 0; border-radius: 10px; color: #4e514a; cursor: pointer; display: flex; flex: 1; font: inherit; font-size: 13px; min-width: 0; overflow: hidden; padding: 11px 9px; text-align: left; text-overflow: ellipsis; transition: background .16s, transform .16s; white-space: nowrap; }
+              #conversation-list .conversation-actions { display: flex; opacity: 0; }
+              #conversation-list li:hover .conversation-actions, #conversation-list li:focus-within .conversation-actions { opacity: 1; }
               #conversation-list button:hover { background: #e9e5da; transform: translateX(2px); }
               #conversation-list button.active { background: #e5e5d9; color: #344b38; font-weight: 600; }
               #clear-history { flex: 0 0 auto; margin-bottom: 14px; }
-              .chat { display: flex; flex: 1; flex-direction: column; min-width: 0; padding: clamp(22px, 5vw, 70px); }
-              #messages { margin: auto; max-width: 720px; padding: 20px 0; width: 100%; }
+              .chat { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding: clamp(22px, 5vw, 70px); }
+              #messages { flex: 1 1 auto; margin: 0 auto; max-width: 720px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px 0; scrollbar-gutter: stable; width: 100%; }
               .welcome { margin: 5vh auto 28px; max-width: 580px; text-align: center; }
               .welcome h2 { color: #302b2e; font-family: Georgia,serif; font-size: clamp(28px, 4vw, 42px); font-weight: 500; letter-spacing: -.035em; margin: 0 0 12px; }
               .welcome p { color: #77786f; font-size: 13px; line-height: 1.7; }
@@ -121,6 +138,8 @@ def home() -> HTMLResponse:
               @keyframes message-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
               .message.user .bubble { margin-left: auto; }
               .bubble { background: #f4f3ee; border-radius: 15px; line-height: 1.7; max-width: 85%; padding: 13px 16px; white-space: pre-wrap; }
+              .message-time { color: #85867e; flex-basis: 100%; font-size: 10px; margin: 3px 0 0 8px; }
+              .message.user .message-time { text-align: right; }
               .user .bubble { background: #657d68; color: white; }
               .user-attachment { border: 1px solid #e1e0d8; border-radius: 14px; display: block; margin: 0 0 8px auto; max-height: 230px; max-width: min(300px, 80%); object-fit: cover; }
               .assistant .bubble { white-space: normal; }
@@ -132,7 +151,9 @@ def home() -> HTMLResponse:
               .assistant .bubble ul, .assistant .bubble ol { margin: 7px 0 15px; padding-left: 25px; }
               .assistant .bubble li { margin: 5px 0; padding-left: 3px; }
               .assistant .bubble hr { border: 0; border-top: 1px solid #dfded6; margin: 20px 0; }
-              .assistant .bubble pre { background: #292d29; border-radius: 10px; color: #f4f3ed; margin: 12px 0; overflow: auto; padding: 14px; }
+              .assistant .bubble pre { background: #292d29; border-radius: 10px; color: #f4f3ed; margin: 12px 0; overflow: auto; padding: 38px 14px 14px; position: relative; }
+              .code-copy { background: #464b47; border: 1px solid #626862; border-radius: 7px; color: #f4f3ed; cursor: pointer; font: inherit; font-size: 10px; padding: 4px 8px; position: absolute; right: 9px; top: 8px; }
+              .code-copy:hover { background: #5b635c; }
               .markdown-table-wrap { margin: 13px 0; max-width: 100%; overflow-x: auto; }
               .markdown-table { border-collapse: collapse; font-size: .94em; min-width: 100%; text-align: left; }
               .markdown-table th, .markdown-table td { border: 1px solid #e1e1d9; padding: 9px 11px; vertical-align: top; }
@@ -144,6 +165,10 @@ def home() -> HTMLResponse:
               .assistant .bubble code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .9em; }
               .assistant .bubble :not(pre) > code { background: #e9e9e2; border-radius: 4px; padding: 2px 5px; }
               .assistant .bubble strong { color: #354b3a; }
+              .citation { background: #e5eadf; border: 0; border-radius: 999px; color: #405744; cursor: pointer; font: inherit; font-size: .78em; font-weight: 650; margin: 0 2px; padding: 1px 7px; vertical-align: 2px; }
+              .citation:hover { background: #d5e0d1; }
+              .source-card.source-highlight { animation: source-pulse 1.1s ease-out; border-color: #79917c; }
+              @keyframes source-pulse { 50% { box-shadow: 0 0 0 4px #657d6820; } }
               .thinking { align-items: center; color: #6e7169; display: inline-flex; gap: 10px; min-height: 24px; }
               .thinking-dots { display: inline-flex; gap: 4px; }
               .thinking-dots i { animation: thinking-pulse 1.15s ease-in-out infinite; background: #788b79; border-radius: 50%; height: 6px; opacity: .35; width: 6px; }
@@ -171,11 +196,15 @@ def home() -> HTMLResponse:
               .image-preview-meta strong { color: #363a34; display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
               .image-preview-meta span { color: #7a7b73; display: block; font-size: 11px; margin-top: 4px; }
               .remove-image { align-items: center; background: #e9e7df; border: 0; border-radius: 50%; color: #55584f; cursor: pointer; display: flex; height: 28px; justify-content: center; width: 28px; }
-              textarea { border: 0; flex: 1; font: inherit; min-height: 50px; outline: none; padding: 13px 8px; resize: vertical; }
+              textarea { border: 0; flex: 1; font: inherit; min-height: 50px; outline: none; padding: 13px 8px; resize: none; }
               #send { align-self: end; background: #30252d; border-radius: 50%; font-size: 0; height: 42px; padding: 0; position: relative; width: 42px; }
               #send::after { content: '↑'; font-size: 21px; line-height: 1; }
+              #send.stop-mode { background: #7b4b45; border-radius: 999px; flex: 0 0 64px; width: 64px; }
+              #send.stop-mode::after { content: 'Stop'; font-size: 12px; }
+              .chat { position: relative; }
+              .chat.drag-active::after { background: #657d68e8; border: 2px dashed #fff; border-radius: 18px; color: #fff; content: 'Drop a PDF or image to add it'; display: grid; font-size: 17px; font-weight: 600; inset: 18px; place-items: center; pointer-events: none; position: absolute; z-index: 3; }
               #status { margin: 7px auto; max-width: 760px; width: 100%; }
-              #menu-button, #drawer-backdrop { display: none; }
+              #drawer-backdrop { display: none; }
               :focus-visible { outline: 3px solid #97ad99; outline-offset: 3px; }
               .layout { width: 100%; }
               aside { min-width: 0; }
@@ -187,20 +216,21 @@ def home() -> HTMLResponse:
                 body { padding: 14px; }
                 aside { flex-basis: 230px; padding: 20px 15px; }
                 .chat { padding: 28px clamp(18px, 4vw, 42px); }
-                .layout { min-height: calc(100vh - 52px); }
+                .layout { min-height: 0; }
               }
               @media (max-width: 620px) {
-                body { padding: 0; }
+                body { height: 100dvh; padding: 0; }
                 header { min-height: 58px; padding: 10px 14px; position: sticky; top: 0; z-index: 5; }
-                .layout { border-radius: 0; flex-direction: column; min-height: calc(100dvh - 58px); }
+                .layout { border-radius: 0; flex-direction: column; min-height: 0; }
                 #menu-button { background: transparent; border: 0; color: #526b57; cursor: pointer; display: block; font-size: 22px; margin-right: 9px; padding: 4px; }
-                aside { align-items: stretch; border: 0; bottom: 0; box-shadow: 14px 0 40px #1718111a; display: flex; flex: initial; left: 0; max-width: 84vw; overflow: auto; padding: 22px 17px; position: fixed; top: 0; transform: translateX(-105%); transition: transform .24s cubic-bezier(.2,.8,.2,1); width: 300px; z-index: 12; }
+                aside { align-items: stretch; border: 0; bottom: 0; box-shadow: 14px 0 40px #1718111a; display: flex; flex: initial; left: 0; max-height: 100dvh; max-width: 84vw; overflow: hidden; padding: 22px 17px; position: fixed; top: 0; transform: translateX(-105%); transition: transform .24s cubic-bezier(.2,.8,.2,1); width: 300px; z-index: 12; }
                 aside.open { transform: translateX(0); }
                 #drawer-backdrop { background: #17181166; display: block; inset: 0; opacity: 0; pointer-events: none; position: fixed; transition: opacity .2s; z-index: 11; }
                 #drawer-backdrop.open { opacity: 1; pointer-events: auto; }
                 .upload-button, .clear-button { flex: 0 0 auto; min-width: 0; padding: 11px 10px; }
                 #upload-status, #documents, aside .side-title { display: block; }
-                .chat { min-height: calc(100dvh - 116px); padding: 18px 14px 14px; }
+                #conversation-list .conversation-actions { opacity: 1; }
+                .chat { flex: 1 1 auto; min-height: 0; padding: 18px 14px 14px; }
                 #messages { margin: 0 auto; padding: 12px 0 20px; }
                 .welcome { margin: 5vh auto 24px; }
                 #chat-form { border-radius: 17px; gap: 7px; padding: 8px; }
@@ -222,6 +252,10 @@ def home() -> HTMLResponse:
                 *, *::before, *::after { animation-duration: .01ms !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
               }
             </style>
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/github-dark.min.css">
+            <script defer src="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/lib/common.min.js"></script>
+            <script>window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] }, startup: { typeset: false } };</script>
+            <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
           </head>
           <body>
             <header>
@@ -238,11 +272,12 @@ def home() -> HTMLResponse:
             <div class="layout">
               <aside>
                 <button id="upload-button" class="upload-button" type="button">＋ Attach a file</button>
-                <p id="upload-status" role="status">PDFs and images are indexed before you ask about them.</p>
+                <p id="upload-status" role="status">Supported: PDF, JPG, PNG, BMP, TIFF, and WebP. Attach an image for a one-off question.</p>
                 <button id="clear-history" class="clear-button" type="button">＋ New chat</button>
                 <h2 class="side-title">Documents</h2>
                 <ul id="documents"></ul>
                 <h2 class="side-title">Chat history</h2>
+                <input id="conversation-search" type="search" placeholder="Search conversations" aria-label="Search conversations">
                 <ul id="conversation-list"></ul>
               </aside>
               <div id="drawer-backdrop"></div>
@@ -272,11 +307,13 @@ def home() -> HTMLResponse:
               const uploadButton = document.getElementById("upload-button");
               const fileInput = document.getElementById("pdf-file");
               const uploadStatus = document.getElementById("upload-status");
+              const conversationSearch = document.getElementById("conversation-search");
               const documentsList = document.getElementById("documents");
               const attachButton = document.getElementById("attach-button");
               const attachmentPreview = document.getElementById("attachment-preview");
               let activeRequest = null;
               let nearBottom = true;
+              let isUploading = false;
 
               function loadSaved(key) {
                 try {
@@ -312,12 +349,12 @@ def home() -> HTMLResponse:
               function persistConversation() {
                 let conversation = conversations.find((item) => item.id === conversationId);
                 if (!conversation) {
-                  conversation = { id: conversationId, title: history.find((item) => item.role === "user")?.text?.slice(0, 42) || "New conversation", history: [], updated: Date.now() };
+                  conversation = { id: conversationId, title: history.find((item) => item.role === "user")?.text?.slice(0, 42) || "New conversation", customTitle: false, history: [], updated: Date.now() };
                   conversations.unshift(conversation);
                 }
                 conversation.history = history; conversation.updated = Date.now();
                 const firstQuestion = history.find((item) => item.role === "user")?.text;
-                if (firstQuestion) conversation.title = firstQuestion.slice(0, 42);
+                if (firstQuestion && !conversation.customTitle) conversation.title = firstQuestion.slice(0, 42);
                 localStorage.setItem("notes-ai-current-conversation", conversationId);
                 saveSaved(CONVERSATIONS_KEY, conversations); saveSaved(HISTORY_KEY, history);
                 renderConversationList();
@@ -325,17 +362,39 @@ def home() -> HTMLResponse:
 
               function renderConversationList() {
                 const list = document.getElementById("conversation-list"); list.replaceChildren();
-                conversations.slice().sort((a, b) => b.updated - a.updated).forEach((item) => {
-                  const row = document.createElement("li"), button = document.createElement("button");
-                  button.textContent = item.title || "New conversation";
-                  button.classList.toggle("active", item.id === conversationId);
-                  button.addEventListener("click", () => {
-                    if (activeRequest) { activeRequest.controller.abort(); activeRequest = null; }
+                const filter = (conversationSearch?.value || "").trim().toLowerCase();
+                conversations.slice().sort((a, b) => b.updated - a.updated).filter((item) => !filter || (item.title || "").toLowerCase().includes(filter)).forEach((item) => {
+                  const row = document.createElement("li"); row.className = "conversation-row";
+                  const open = document.createElement("button"); open.type = "button"; open.className = "conversation-open";
+                  open.textContent = item.title || "New conversation";
+                  open.classList.toggle("active", item.id === conversationId);
+                  open.addEventListener("click", () => {
+                    if (activeRequest) { status.textContent = "Stop the current answer before switching chats."; return; }
                     conversationId = item.id; history = item.history || [];
                     localStorage.setItem("notes-ai-current-conversation", conversationId);
                     renderHistory(); renderConversationList(); closeHistoryDrawer();
                   });
-                  row.appendChild(button); list.appendChild(row);
+                  const actions = document.createElement("span"); actions.className = "conversation-actions";
+                  const rename = document.createElement("button"); rename.type = "button"; rename.className = "conversation-action"; rename.textContent = "Rename";
+                  rename.addEventListener("click", (event) => {
+                    event.stopPropagation();
+                    const title = window.prompt("Rename conversation", item.title || "New conversation");
+                    if (title?.trim()) { item.title = title.trim().slice(0, 80); item.customTitle = true; item.updated = Date.now(); saveSaved(CONVERSATIONS_KEY, conversations); renderConversationList(); }
+                  });
+                  const remove = document.createElement("button"); remove.type = "button"; remove.className = "conversation-action"; remove.textContent = "Delete";
+                  remove.addEventListener("click", (event) => {
+                    event.stopPropagation();
+                    if (activeRequest && item.id === conversationId) { status.textContent = "Stop the current answer before deleting this chat."; return; }
+                    if (!window.confirm(`Delete “${item.title || "New conversation"}”?`)) return;
+                    conversations = conversations.filter((conversation) => conversation.id !== item.id);
+                    if (conversationId === item.id) {
+                      conversationId = crypto.randomUUID(); history = [];
+                      conversations.unshift({ id: conversationId, title: "New conversation", customTitle: false, history: [], updated: Date.now() });
+                      localStorage.setItem("notes-ai-current-conversation", conversationId); renderHistory();
+                    }
+                    saveSaved(CONVERSATIONS_KEY, conversations); renderConversationList();
+                  });
+                  actions.append(rename, remove); row.append(open, actions); list.appendChild(row);
                 });
               }
 
@@ -351,7 +410,8 @@ def home() -> HTMLResponse:
                 section.className = "sources";
                 const details = document.createElement("details");
                 const summary = document.createElement("summary");
-                summary.textContent = `Sources (${sources.length})`;
+                const documentCount = new Set(sources.map((source) => source.source).filter(Boolean)).size || sources.length;
+                summary.textContent = `Sources (${documentCount} documents, ${sources.length} passages)`;
                 details.appendChild(summary);
                 sources.forEach((source, index) => {
                   const card = document.createElement("div");
@@ -391,22 +451,48 @@ def home() -> HTMLResponse:
                 }
                 if (role === "assistant") renderMarkdown(bubble, message.text || "");
                 else bubble.textContent = message.text || "";
+                enhanceRenderedContent(bubble);
                 row.appendChild(bubble);
+                if (message.timestamp) {
+                  const time = document.createElement("time"); time.className = "message-time";
+                  time.dateTime = new Date(message.timestamp).toISOString();
+                  time.textContent = new Date(message.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+                  row.appendChild(time);
+                }
                 addSources(row, message.sources);
-                if (role === "assistant" && message.text) {
+                if (message.text) {
                   const tools = document.createElement("div"); tools.className = "message-tools";
-                  const copy = document.createElement("button"); copy.type = "button"; copy.textContent = "Copy answer";
+                  const copy = document.createElement("button"); copy.type = "button"; copy.textContent = role === "assistant" ? "Copy answer" : "Copy message";
                   copy.addEventListener("click", async () => {
                     try { await navigator.clipboard.writeText(message.text); copy.textContent = "Copied"; }
                     catch { copy.textContent = "Copy unavailable"; }
-                    setTimeout(() => { copy.textContent = "Copy answer"; }, 1400);
+                    setTimeout(() => { copy.textContent = role === "assistant" ? "Copy answer" : "Copy message"; }, 1400);
                   });
-                  tools.appendChild(copy); row.appendChild(tools);
+                  tools.appendChild(copy);
+                  const messageIndex = history.indexOf(message);
+                  if (role === "assistant" && messageIndex === history.length - 1 && messageIndex > 0 && history[messageIndex - 1].role === "user") {
+                    const regenerate = document.createElement("button"); regenerate.type = "button"; regenerate.textContent = "Regenerate";
+                    regenerate.addEventListener("click", () => {
+                      if (activeRequest) return;
+                      const userMessage = history[messageIndex - 1];
+                      history = history.slice(0, messageIndex - 1);
+                      questionInput.value = userMessage.text || "";
+                      webSearchToggle.checked = Boolean(userMessage.webSearch);
+                      if (userMessage.imagePreview?.startsWith("data:")) {
+                        chatImage = { data: userMessage.imagePreview.split(",", 2)[1], type: "image/jpeg", name: userMessage.imageName || "Attached image", preview: userMessage.imagePreview };
+                        showImagePreview(chatImage.name, chatImage.preview);
+                      }
+                      form.requestSubmit();
+                    });
+                    tools.appendChild(regenerate);
+                  }
+                  row.appendChild(tools);
                 }
                 messages.appendChild(row);
               }
 
-              function renderHistory() {
+              function renderHistory(forceScroll = true) {
+                const previousScrollTop = messages.scrollTop;
                 messages.replaceChildren();
                 if (history.length === 0) {
                   const welcome = document.createElement("div");
@@ -433,31 +519,75 @@ def home() -> HTMLResponse:
                 } else {
                   history.forEach(renderMessage);
                 }
-                messages.scrollTop = messages.scrollHeight;
+                if (forceScroll || nearBottom) messages.scrollTop = messages.scrollHeight;
+                else messages.scrollTop = previousScrollTop;
+              }
+
+              function updateComposerState() {
+                questionInput.style.height = "auto";
+                questionInput.style.height = `${Math.min(questionInput.scrollHeight, 180)}px`;
+                sendButton.disabled = !activeRequest && (!questionInput.value.trim() || isUploading);
+              }
+
+              function enhanceRenderedContent(container) {
+                if (window.hljs) container.querySelectorAll("pre code").forEach((code) => {
+                  if (!code.dataset.highlighted) window.hljs.highlightElement(code);
+                });
+                if (window.MathJax?.typesetPromise) window.MathJax.typesetPromise([container]).catch(() => {});
               }
 
               function renderMarkdown(container, markdown) {
                 const root = document.createDocumentFragment();
-                let list = null, codeLines = null;
+                let list = null, codeLines = null, codeLanguage = "";
                 const closeList = () => { if (list) { root.appendChild(list); list = null; } };
+                const makeCodeBlock = (lines, language) => {
+                  const pre = document.createElement("pre"), code = document.createElement("code");
+                  const safeLanguage = language.replace(/[^a-zA-Z0-9_+-]/g, "");
+                  code.textContent = lines.join("\n");
+                  if (safeLanguage && window.hljs?.getLanguage(safeLanguage)) code.className = `language-${safeLanguage}`;
+                  const copyCode = document.createElement("button"); copyCode.type = "button"; copyCode.className = "code-copy"; copyCode.textContent = "Copy code";
+                  copyCode.addEventListener("click", async () => {
+                    try { await navigator.clipboard.writeText(code.textContent); copyCode.textContent = "Copied"; }
+                    catch { copyCode.textContent = "Copy unavailable"; }
+                    setTimeout(() => { copyCode.textContent = "Copy code"; }, 1400);
+                  });
+                  pre.append(code, copyCode);
+                  if (window.hljs) window.hljs.highlightElement(code);
+                  return pre;
+                };
                 const inline = (parent, text) => {
                   const parts = text.replaceAll("<br/>", "<br>").replaceAll("<br />", "<br>").split("<br>");
                   parts.forEach((part, partIndex) => {
                     if (partIndex) parent.appendChild(document.createElement("br"));
-                    const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
+                    const pattern = /(\x5B[^\x5D]+\x5D\(https?:\/\/[^)\s]+\)|\x5B\d+\x5D|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
                     let cursor = 0, match;
                     while ((match = pattern.exec(part))) {
                       parent.appendChild(document.createTextNode(part.slice(cursor, match.index)));
                       const token = match[0];
-                      const tag = token.startsWith("**") ? "strong" : token.startsWith("`") ? "code" : "em";
-                      const el = document.createElement(tag);
-                      el.textContent = token.slice(tag === "strong" ? 2 : 1, tag === "strong" ? -2 : -1);
+                      let el;
+                      if (token.startsWith("[") && token.includes("](")) {
+                        const split = token.indexOf("](");
+                        const href = token.slice(split + 2, -1);
+                        try {
+                          const url = new URL(href);
+                          if (!["http:", "https:"].includes(url.protocol)) throw new Error("Unsafe link");
+                          el = document.createElement("a"); el.href = url.href; el.target = "_blank"; el.rel = "noopener noreferrer";
+                          el.textContent = token.slice(1, split);
+                        } catch { el = document.createTextNode(token); }
+                      } else if (token.startsWith("[")) {
+                        el = document.createElement("button"); el.type = "button"; el.className = "citation";
+                        el.dataset.sourceIndex = token.slice(1, -1); el.textContent = token;
+                      } else {
+                        const tag = token.startsWith("**") ? "strong" : token.startsWith("`") ? "code" : "em";
+                        el = document.createElement(tag);
+                        el.textContent = token.slice(tag === "strong" ? 2 : 1, tag === "strong" ? -2 : -1);
+                      }
                       parent.appendChild(el); cursor = pattern.lastIndex;
                     }
                     parent.appendChild(document.createTextNode(part.slice(cursor)));
                   });
                 };
-                const lines = markdown.split("\\n");
+                const lines = markdown.split("\n");
                 const tableCells = (line) => {
                   const cells = line.trim().split("|");
                   if (cells[0].trim() === "") cells.shift();
@@ -473,9 +603,8 @@ def home() -> HTMLResponse:
                   if (line.trim().startsWith("```")) {
                     closeList();
                     if (codeLines) {
-                      const pre = document.createElement("pre"), code = document.createElement("code");
-                      code.textContent = codeLines.join("\\n"); pre.appendChild(code); root.appendChild(pre); codeLines = null;
-                    } else codeLines = [];
+                      root.appendChild(makeCodeBlock(codeLines, codeLanguage)); codeLines = null; codeLanguage = "";
+                    } else { codeLines = []; codeLanguage = line.trim().slice(3).trim().split(/\s+/)[0] || ""; }
                     continue;
                   }
                   if (codeLines) { codeLines.push(line); continue; }
@@ -512,7 +641,7 @@ def home() -> HTMLResponse:
                   const p = document.createElement("p"); inline(p, line); root.appendChild(p);
                 }
                 closeList();
-                if (codeLines) { const pre = document.createElement("pre"), code = document.createElement("code"); code.textContent = codeLines.join("\\n"); pre.appendChild(code); root.appendChild(pre); }
+                if (codeLines) root.appendChild(makeCodeBlock(codeLines, codeLanguage));
                 container.replaceChildren(root);
               }
 
@@ -534,21 +663,101 @@ def home() -> HTMLResponse:
                 documentsList.replaceChildren();
                 documents.forEach((documentInfo) => {
                   const item = document.createElement("li");
-                  item.textContent = documentInfo.filename;
+                  const selectable = !["queued", "processing", "failed", "uploading"].includes(documentInfo.status);
+                  const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.className = "document-select";
+                  checkbox.checked = documentInfo.selected !== false; checkbox.disabled = !selectable;
+                  checkbox.setAttribute("aria-label", `Use ${documentInfo.filename} in note answers`);
+                  checkbox.addEventListener("change", () => { documentInfo.selected = checkbox.checked; saveSaved(DOCUMENTS_KEY, documents); });
+                  const entry = document.createElement("span"); entry.className = "document-entry";
+                  const name = document.createElement("span"); name.className = "document-name"; name.textContent = documentInfo.filename; name.title = documentInfo.filename;
+                  const state = document.createElement("span"); state.className = "document-status";
+                  state.textContent = documentInfo.status === "queued" ? "Queued" : documentInfo.status === "processing" ? "Processing" : documentInfo.status === "failed" ? "Failed" : documentInfo.status === "uploading" ? `Uploading ${documentInfo.progress || 0}%` : "Indexed";
+                  entry.append(name, state);
+                  const preview = document.createElement("button"); preview.type = "button"; preview.className = "document-action"; preview.textContent = "View"; preview.title = "Preview document";
+                  preview.disabled = !documentInfo.preview_url;
+                  preview.addEventListener("click", () => { if (documentInfo.preview_url) window.open(documentInfo.preview_url, "_blank", "noopener,noreferrer"); });
+                  const remove = document.createElement("button"); remove.type = "button"; remove.className = "document-action"; remove.textContent = "×"; remove.title = "Delete document";
+                  remove.setAttribute("aria-label", `Delete ${documentInfo.filename}`);
+                  remove.addEventListener("click", async () => {
+                    if (remove.disabled) return;
+                    remove.disabled = true; remove.textContent = "…"; remove.title = "Removing document";
+                    documents = documents.filter((entry) => entry.filename !== documentInfo.filename);
+                    saveSaved(DOCUMENTS_KEY, documents); renderDocuments();
+                    status.textContent = `Removing ${documentInfo.filename}…`;
+                    try {
+                      const response = await fetch(`/api/documents/${encodeURIComponent(documentInfo.filename)}`, { method: "DELETE" });
+                      const result = await response.json().catch(() => ({}));
+                      if (!response.ok && response.status !== 404) throw new Error(result.detail || "Could not delete document.");
+                      status.textContent = response.status === 404 ? "Removed an outdated document entry." : "Document deleted.";
+                    } catch (error) {
+                      await refreshDocuments();
+                      status.textContent = error.message || "Could not delete document.";
+                    }
+                  });
+                  item.append(checkbox, entry, preview, remove);
                   documentsList.appendChild(item);
+                });
+              }
+
+              async function refreshDocuments() {
+                try {
+                  const response = await fetch("/api/documents");
+                  if (!response.ok) return;
+                  const serverDocuments = await response.json();
+                  const previous = new Map(documents.map((item) => [item.filename, item]));
+                  const pending = documents.filter((item) => ["uploading", "queued", "processing"].includes(item.status) && !serverDocuments.some((file) => file.filename === item.filename));
+                  documents = serverDocuments.map((item) => ({ ...item, selected: previous.get(item.filename)?.selected !== false }));
+                  documents.push(...pending);
+                  saveSaved(DOCUMENTS_KEY, documents); renderDocuments();
+                } catch { /* Keep locally saved documents visible if the list endpoint is unavailable. */ }
+              }
+
+              function uploadDocument(formData, onProgress) {
+                return new Promise((resolve, reject) => {
+                  const request = new XMLHttpRequest();
+                  request.open("POST", "/api/documents");
+                  request.upload.addEventListener("progress", (event) => {
+                    if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+                  });
+                  request.addEventListener("load", () => {
+                    let result;
+                    try { result = JSON.parse(request.responseText); }
+                    catch { reject(new Error("The server returned an invalid upload response.")); return; }
+                    if (request.status < 200 || request.status >= 300) reject(new Error(result.detail || "Could not upload this file."));
+                    else resolve(result);
+                  });
+                  request.addEventListener("error", () => reject(new Error("Upload failed. Check your connection and try again.")));
+                  request.addEventListener("abort", () => reject(new Error("Upload cancelled.")));
+                  request.send(formData);
                 });
               }
 
               renderHistory();
               renderDocuments();
               renderConversationList();
+              window.addEventListener("load", () => messages.querySelectorAll(".bubble").forEach(enhanceRenderedContent));
+              updateComposerState();
+              conversationSearch.addEventListener("input", renderConversationList);
+              refreshDocuments();
+              messages.addEventListener("click", (event) => {
+                const citation = event.target.closest(".citation");
+                if (!citation) return;
+                const row = citation.closest(".message");
+                const details = row?.querySelector(".sources details");
+                const index = Number(citation.dataset.sourceIndex) - 1;
+                const source = row?.querySelectorAll(".source-card")[index];
+                if (!details || !source) { status.textContent = "No retrieved source is available for this citation."; return; }
+                details.open = true; source.scrollIntoView({ behavior: "smooth", block: "center" });
+                source.classList.add("source-highlight"); setTimeout(() => source.classList.remove("source-highlight"), 1200);
+              });
               messages.addEventListener("scroll", () => {
                 nearBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 80;
               });
 
               document.getElementById("clear-history").addEventListener("click", () => {
+                if (activeRequest) { status.textContent = "Stop the current answer before starting a new chat."; return; }
                 conversationId = crypto.randomUUID(); history = [];
-                conversations.unshift({ id: conversationId, title: "New chat", history: [], updated: Date.now() });
+                conversations.unshift({ id: conversationId, title: "New chat", customTitle: false, history: [], updated: Date.now() });
                 saveSaved(CONVERSATIONS_KEY, conversations);
                 renderHistory();
                 localStorage.setItem("notes-ai-current-conversation", conversationId);
@@ -556,18 +765,39 @@ def home() -> HTMLResponse:
               });
 
               document.getElementById("menu-button").addEventListener("click", () => {
-                document.querySelector("aside").classList.add("open");
-                document.getElementById("drawer-backdrop").classList.add("open");
-                document.getElementById("menu-button").setAttribute("aria-expanded", "true");
+                if (window.matchMedia("(max-width: 620px)").matches) {
+                  document.querySelector("aside").classList.add("open");
+                  document.getElementById("drawer-backdrop").classList.add("open");
+                  document.getElementById("menu-button").setAttribute("aria-expanded", "true");
+                } else {
+                  const collapsed = document.querySelector(".layout").classList.toggle("sidebar-collapsed");
+                  document.getElementById("menu-button").setAttribute("aria-expanded", String(!collapsed));
+                }
               });
               document.getElementById("drawer-backdrop").addEventListener("click", closeHistoryDrawer);
               document.addEventListener("keydown", (event) => {
                 if (event.key === "Escape") closeHistoryDrawer();
+                if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); conversationSearch.focus(); }
+                if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "o") { event.preventDefault(); document.getElementById("clear-history").click(); }
               });
 
               uploadButton.addEventListener("click", () => fileInput.click());
               attachButton.addEventListener("click", () => {
                 fileInput.click();
+              });
+              const chatPanel = document.querySelector(".chat");
+              chatPanel.addEventListener("dragover", (event) => {
+                if ([...(event.dataTransfer?.types || [])].includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; chatPanel.classList.add("drag-active"); }
+              });
+              chatPanel.addEventListener("dragleave", (event) => {
+                if (!chatPanel.contains(event.relatedTarget)) chatPanel.classList.remove("drag-active");
+              });
+              chatPanel.addEventListener("drop", (event) => {
+                const file = event.dataTransfer?.files?.[0];
+                if (!file) return;
+                event.preventDefault(); chatPanel.classList.remove("drag-active");
+                const transfer = new DataTransfer(); transfer.items.add(file); fileInput.files = transfer.files;
+                fileInput.dispatchEvent(new Event("change", { bubbles: true }));
               });
               fileInput.addEventListener("change", async () => {
                 const file = fileInput.files[0];
@@ -606,22 +836,26 @@ def home() -> HTMLResponse:
                   return;
                 }
 
+                documents = documents.filter((item) => item.filename !== file.name);
+                const pendingDocument = { filename: file.name, kind: file.type === "application/pdf" ? "pdf" : "image", status: "uploading", progress: 0, selected: true };
+                documents.unshift(pendingDocument); renderDocuments(); saveSaved(DOCUMENTS_KEY, documents);
+                isUploading = true; updateComposerState();
+
                 uploadButton.disabled = true;
                 attachButton.disabled = true;
                 sendButton.disabled = true;
                 attachmentPreview.textContent = `Adding ${file.name}…`;
                 uploadStatus.textContent = `Uploading ${file.name}...`;
+                let serverAccepted = false;
                 try {
                   const formData = new FormData();
                   formData.append("file", file);
-                  const uploadResponse = await fetch("/api/documents", {
-                    method: "POST",
-                    body: formData,
+                  const job = await uploadDocument(formData, (progress) => {
+                    pendingDocument.progress = progress;
+                    uploadStatus.textContent = `Uploading ${file.name}: ${progress}%`;
+                    renderDocuments();
                   });
-                  const job = await uploadResponse.json();
-                  if (!uploadResponse.ok) {
-                    throw new Error(job.detail || "Could not upload this file.");
-                  }
+                  serverAccepted = true; pendingDocument.status = job.status; renderDocuments();
 
                   uploadStatus.textContent = "File uploaded. Extracting and indexing text...";
                   while (job.status === "queued" || job.status === "processing") {
@@ -632,24 +866,28 @@ def home() -> HTMLResponse:
                       throw new Error(updatedJob.detail || "Could not check ingestion status.");
                     }
                     Object.assign(job, updatedJob);
+                    pendingDocument.status = job.status; renderDocuments();
                   }
                   if (job.status !== "completed") {
                     throw new Error(job.error || "File ingestion failed.");
                   }
 
-                  documents = documents.filter((item) => item.filename !== file.name);
-                  documents.unshift({ filename: file.name });
+                  pendingDocument.status = "indexed"; pendingDocument.progress = 100;
                   saveSaved(DOCUMENTS_KEY, documents);
                   renderDocuments();
                   uploadStatus.textContent = `Ready to chat. Indexed ${job.result.stored} chunks.`;
                   attachmentPreview.textContent = `✓ ${file.name} added to your notes`;
                 } catch (error) {
+                  if (serverAccepted) pendingDocument.status = "failed";
+                  else documents = documents.filter((item) => item !== pendingDocument);
+                  saveSaved(DOCUMENTS_KEY, documents); renderDocuments();
                   uploadStatus.textContent = error.message || "PDF upload failed.";
                   attachmentPreview.textContent = "";
                 } finally {
                   uploadButton.disabled = false;
                   attachButton.disabled = false;
-                  sendButton.disabled = false;
+                  isUploading = false;
+                  updateComposerState();
                   fileInput.value = "";
                 }
               });
@@ -663,21 +901,22 @@ def home() -> HTMLResponse:
                 }
                 const question = questionInput.value.trim();
                 if (!question) return;
-                const useNotes = documents.some((document) => document.filename?.toLowerCase().endsWith(".pdf"));
+                const selectedSources = documents.filter((document) => document.selected !== false && !["queued", "processing", "failed"].includes(document.status)).map((document) => document.filename);
+                const useNotes = selectedSources.length > 0;
                 const useWebSearch = webSearchToggle.checked;
                 const priorHistory = history
                   .filter((message) => (message.role === "user" || message.role === "assistant") && message.text)
                   .slice(-12)
                   .map((message) => ({ role: message.role, content: message.text.slice(-4000) }));
 
-                history.push({ role: "user", text: question, sources: [], ...(chatImage ? { imagePreview: chatImage.preview, imageName: chatImage.name } : {}) });
-                const assistantMessage = { role: "assistant", text: "", sources: [] };
+                history.push({ role: "user", text: question, timestamp: Date.now(), webSearch: webSearchToggle.checked, sources: [], ...(chatImage ? { imagePreview: chatImage.preview, imageName: chatImage.name } : {}) });
+                const assistantMessage = { role: "assistant", text: "", timestamp: Date.now(), sources: [] };
                 history.push(assistantMessage);
                 renderHistory();
                 const assistantBubble = messages.lastElementChild.querySelector(".bubble");
                 persistConversation();
-                sendButton.disabled = true;
                 sendButton.disabled = false;
+                sendButton.classList.add("stop-mode");
                 sendButton.textContent = "Stop";
                 questionInput.disabled = true;
                 status.textContent = useWebSearch ? "Searching the web..." : useNotes ? "Searching your notes..." : "Thinking...";
@@ -686,11 +925,12 @@ def home() -> HTMLResponse:
                   const messageId = crypto.randomUUID();
                   const controller = new AbortController();
                   activeRequest = { messageId, controller };
+                  updateComposerState();
                   const response = await fetch("/api/query/stream", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     signal: controller.signal,
-                    body: JSON.stringify({ question, history: priorHistory, use_notes: useNotes, web_search: useWebSearch, image_data: chatImage?.data || null, image_type: chatImage?.type || null, message_id: messageId, conversation_id: localStorage.getItem("notes-ai-current-conversation") }),
+                    body: JSON.stringify({ question, history: priorHistory, use_notes: useNotes, selected_sources: selectedSources, web_search: useWebSearch, image_data: chatImage?.data || null, image_type: chatImage?.type || null, message_id: messageId, conversation_id: localStorage.getItem("notes-ai-current-conversation") }),
                   });
                   if (!response.ok) {
                     const data = await response.json();
@@ -705,10 +945,10 @@ def home() -> HTMLResponse:
                   while (!finished) {
                     const { value, done } = await reader.read();
                     buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-                    const events = buffer.split(/\\r?\\n\\r?\\n/);
+                    const events = buffer.split(/\r?\n\r?\n/);
                     buffer = events.pop() || "";
                     for (const rawEvent of events) {
-                      const dataLine = rawEvent.split(/\\r?\\n/).find((line) => line.startsWith("data:"));
+                      const dataLine = rawEvent.split(/\r?\n/).find((line) => line.startsWith("data:"));
                       if (!dataLine) continue;
                       const data = dataLine.slice(5).trimStart();
                       if (data === "[DONE]") { finished = true; break; }
@@ -742,7 +982,8 @@ def home() -> HTMLResponse:
                 } catch (error) {
                   if (error.name === "AbortError") status.textContent = "Generation stopped.";
                   else {
-                    assistantMessage.text = error.message || "Could not reach the API.";
+                    if (assistantMessage.text) assistantMessage.text += `\n\n_Connection interrupted: ${error.message || "could not reach the API"}. Showing the response received so far._`;
+                    else assistantMessage.text = error.message || "Could not reach the API.";
                     assistantMessage.sources = [];
                     status.textContent = assistantMessage.text;
                   }
@@ -753,13 +994,15 @@ def home() -> HTMLResponse:
                     chatImage = null;
                     attachmentPreview.textContent = "";
                   }
-                  renderHistory();
+                  renderHistory(false);
                   persistConversation();
                   sendButton.disabled = false;
+                  sendButton.classList.remove("stop-mode");
                   sendButton.textContent = "Send";
                   questionInput.disabled = false;
                   questionInput.value = "";
                   questionInput.focus();
+                  updateComposerState();
                   if (["Writing answer…", "Searching your notes...", "Searching the web...", "Thinking..."].includes(status.textContent)) status.textContent = "Ready";
                 }
               });
@@ -770,6 +1013,7 @@ def home() -> HTMLResponse:
                   form.requestSubmit();
                 }
               });
+              questionInput.addEventListener("input", updateComposerState);
             </script>
           </body>
         </html>
@@ -789,6 +1033,7 @@ def query_notes(request: QueryRequest) -> QueryResponse:
         image=_decode_image(request),
         use_notes=request.use_notes,
         web_search=request.web_search,
+        selected_sources=request.selected_sources,
         history=[turn.model_dump() for turn in request.history],
     )
     return QueryResponse(answer=result["answer"], sources=result["sources"])
@@ -816,6 +1061,7 @@ async def stream_query(payload: QueryRequest, request: Request) -> StreamingResp
                 cancel_event=cancel_event,
                 use_notes=payload.use_notes,
                 web_search=payload.web_search,
+                selected_sources=payload.selected_sources,
                 history=[turn.model_dump() for turn in payload.history],
             ):
                 if cancel_event.is_set():
@@ -893,7 +1139,6 @@ def _decode_image(request: QueryRequest):
         if len(raw) > 10 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Images must be 10 MB or smaller.")
         from io import BytesIO
-        from PIL import Image, UnidentifiedImageError
 
         with Image.open(BytesIO(raw)) as opened:
             opened.verify()
