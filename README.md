@@ -8,16 +8,27 @@ uses Groq to generate answers with source citations.
 ## Requirements
 
 - Python 3.12
-- [`uv`](https://docs.astral.sh/uv/)
+- [`uv`](https://docs.astral.sh/uv/) (recommended) or `pip`
+- Tesseract OCR, available on `PATH` if your environment needs the local OCR fallback
 - Pinecone API key
 - Groq API key
+- Optional: OpenRouter API key and Tavily API key
 
 ## Setup
 
-Create the environment and install the locked dependencies:
+Using `uv`, create the environment and install the locked dependencies:
 
 ```powershell
 uv sync
+```
+
+For a standard virtual environment and `pip` installation:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
 Create a `.env` file in the project root with:
@@ -27,6 +38,11 @@ PINECONE_API_KEY=your-pinecone-api-key
 PINECONE_INDEX_NAME=handwritten-notes-hybrid
 GROQ_API_KEY=your-groq-api-key
 GENERATOR_MODEL=openai/gpt-oss-20b
+
+# Optional web and image providers
+TAVILY_API_KEY=your-tavily-api-key
+OPENROUTER_API_KEY=your-openrouter-api-key
+OPENROUTER_MODEL=openai/gpt-4o-mini
 ```
 
 Keep `.env` private; it is ignored by Git. The default generator model is
@@ -105,8 +121,9 @@ print(result["answer"])
 print(result["sources"])
 ```
 
-Both paths need a reachable Pinecone index and `GROQ_API_KEY`. The current
-project provides Python pipeline interfaces; no HTTP query route is included.
+Both Python paths need a reachable Pinecone index and `GROQ_API_KEY`. The
+FastAPI application exposes the chat and document APIs at `/api/query`,
+`/api/documents`, and `/docs`.
 
 ## Project layout
 

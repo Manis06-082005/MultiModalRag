@@ -1,24 +1,33 @@
-# Core ML / LLM dependencies
+# Core LLM and RAG dependencies
 accelerate>=1.15.0
-transformers>=4.57.0
-sentence-transformers
-pinecone
-pinecone-text>=0.11.0
-langchain
+langchain>=1.5.0
+langchain-core>=1.5.0
 langchain-groq>=1.1.0
-numpy
+langgraph>=1.0.0
+sentence-transformers>=6.3.0
+transformers>=4.57.0
+numpy>=2.5.4
 
-# Vision / document processing
-opencv-python-headless
-pillow
-pymupdf
-pytesseract
-easyocr
-torch
-torchvision
+# Vector storage
+pinecone>=10.3.0
+pinecone-text>=0.11.0
 
-# API / app runtime
-fastapi
-uvicorn[standard]
-python-dotenv
-pyyaml
+# Vision and document processing
+easyocr>=1.7.2
+opencv-python-headless>=5.0.0.93
+pillow>=13.0.0
+pymupdf>=2.1
+pytesseract>=0.3.13
+torch>=2.15.0
+torchvision>=0.29.2
+
+# Web application
+fastapi>=0.162.5
+pydantic>=2.12.0
+python-multipart>=0.0.34
+uvicorn[standard]>=0.54.0
+
+# Configuration and testing
+python-dotenv>=1.2.4
+pyyaml>=6.0.3
+pytest>=9.2.0

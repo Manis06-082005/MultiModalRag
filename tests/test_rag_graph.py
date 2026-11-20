@@ -1,6 +1,8 @@
 from collections.abc import Sequence
 from typing import Any
 
+from PIL import Image
+
 from HandwrittenNotesRAG.components.generator import Generator
 from HandwrittenNotesRAG.pipelines.retrieval_pipeline import RetrievalPipeline
 from HandwrittenNotesRAG.rag.graph import RAGGraph
@@ -24,6 +26,10 @@ class FakeGenerator(Generator):
         self,
         question: str,
         documents: Sequence[dict[str, Any]],
+        image: Image.Image | None = None,
+        grounded: bool = True,
+        web_search: bool = False,
+        history: Sequence[dict[str, str]] = (),
     ) -> str:
         self.calls.append((question, list(documents)))
         return "Generated answer"
