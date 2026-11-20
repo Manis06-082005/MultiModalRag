@@ -28,7 +28,7 @@ class RAGNodes:
         return {"documents": documents, "error": ""}
 
     @staticmethod
-    def no_results(_: RAGState) -> dict[str, str]:
+    def no_results(state: RAGState) -> dict[str, str]:
         """Return a grounded response when retrieval found no usable passages."""
         return {
             "answer": "I couldn't find relevant information in your notes to answer that."

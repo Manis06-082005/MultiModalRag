@@ -1,5 +1,7 @@
 """Build and invoke the LangGraph note question-answering workflow."""
 
+from typing import cast
+
 from langgraph.graph import END, START, StateGraph
 
 from ..components.generator import Generator
@@ -63,4 +65,4 @@ class RAGGraph:
 
     def invoke(self, state: RAGState) -> RAGState:
         """Expose the compiled graph's state-based invocation API."""
-        return self.graph.invoke(state)
+        return cast(RAGState, self.graph.invoke(state))

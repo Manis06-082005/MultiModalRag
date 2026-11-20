@@ -1,4 +1,6 @@
 
+from typing import Any
+
 import torch
 from PIL import Image
 from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
@@ -18,7 +20,7 @@ class VisionExtractor:
                 self.MODEL_ID
             )
 
-            self.model = Qwen3VLForConditionalGeneration.from_pretrained(
+            self.model: Any = Qwen3VLForConditionalGeneration.from_pretrained(
                 self.MODEL_ID,
                 dtype="auto",
                 device_map="auto"

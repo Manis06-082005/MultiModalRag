@@ -3,6 +3,7 @@
 from ..components.embedding import EmbeddingGenerator
 from ..components.pinecone_store import PineconeStore
 from ..components.retriever import Retriever
+from collections.abc import Sequence
 
 
 class RetrievalPipeline:
@@ -24,12 +25,14 @@ class RetrievalPipeline:
             rrf_k=rrf_k,
         )
 
-    def retrieve(self, query: str) -> list[dict]:
+    def retrieve(self, query: str, selected_sources: Sequence[str] | None = None) -> list[dict]:
         """Return ranked text passages and their source metadata."""
         if not isinstance(query, str) or not query.strip():
             return []
-        return self.retriever.search(query.strip())
+        if selected_sources is None:
+            return self.retriever.search(query.strip())
+        return self.retriever.search(query.strip(), selected_sources=selected_sources)
 
-    def run(self, query: str) -> list[dict]:
+    def run(self, query: str, selected_sources: Sequence[str] | None = None) -> list[dict]:
         """Alias for :meth:`retrieve`."""
-        return self.retrieve(query)
+        return self.retrieve(query, selected_sources=selected_sources)

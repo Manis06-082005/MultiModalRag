@@ -1,7 +1,8 @@
 """Retrieve note passages and generate a source-grounded answer."""
 
-from collections.abc import Iterator
+import re
 import threading
+from collections.abc import Iterator
 from typing import Any
 from PIL import Image
 
@@ -9,6 +10,16 @@ from ..components.generator import Generator
 from ..components.retriever import Retriever
 from ..components.web_search import TavilyWebSearch
 from .retrieval_pipeline import RetrievalPipeline
+
+
+def _greeting_response(question: str) -> str | None:
+    if re.fullmatch(
+        r"(?:hi|hello|hey|hiya|good morning|good afternoon|good evening)(?: there)?[.!?]*",
+        question.strip(),
+        flags=re.IGNORECASE,
+    ):
+        return "Hi! How can I help you today?"
+    return None
 
 
 class RAGPipeline:
@@ -28,13 +39,19 @@ class RAGPipeline:
         self.web_searcher = web_searcher or TavilyWebSearch()
         self.generator = generator or Generator()
 
-    def _retrieve(self, question: str) -> list[dict[str, Any]]:
+    def _retrieve(self, question: str, selected_sources: list[str] | None = None) -> list[dict[str, Any]]:
         if self.retrieval_pipeline is not None:
-            return self.retrieval_pipeline.retrieve(question)
+            if selected_sources is None:
+                return self.retrieval_pipeline.retrieve(question)
+            return self.retrieval_pipeline.retrieve(question, selected_sources=selected_sources)
         if self.retriever is not None:
-            return self.retriever.search(question)
+            if selected_sources is None:
+                return self.retriever.search(question)
+            return self.retriever.search(question, selected_sources=selected_sources)
         self.retrieval_pipeline = RetrievalPipeline()
-        return self.retrieval_pipeline.retrieve(question)
+        if selected_sources is None:
+            return self.retrieval_pipeline.retrieve(question)
+        return self.retrieval_pipeline.retrieve(question, selected_sources=selected_sources)
 
     def ask(
         self,
@@ -42,18 +59,23 @@ class RAGPipeline:
         image: Image.Image | None = None,
         use_notes: bool = True,
         web_search: bool = False,
+        selected_sources: list[str] | None = None,
         history: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         """Return the generated answer alongside the passages used as sources."""
         if not isinstance(question, str) or not question.strip():
             raise ValueError("question must be a non-empty string")
-        passages = self._retrieve(question.strip()) if use_notes else []
+        clean_question = question.strip()
+        greeting = _greeting_response(clean_question) if image is None and not web_search else None
+        if greeting is not None:
+            return {"answer": greeting, "sources": []}
+        passages = self._retrieve(clean_question, selected_sources=selected_sources) if use_notes else []
         if web_search:
-            passages.extend(self.web_searcher.search(question.strip()))
+            passages.extend(self.web_searcher.search(clean_question))
         if image is not None:
             passages = [*passages, {"text": "Image supplied directly to the vision model.", "source": "Attached image"}]
         answer = self.generator.generate(
-            question.strip(),
+            clean_question,
             passages,
             image=image,
             grounded=use_notes or image is not None or web_search,
@@ -69,15 +91,21 @@ class RAGPipeline:
         cancel_event: threading.Event | None = None,
         use_notes: bool = True,
         web_search: bool = False,
+        selected_sources: list[str] | None = None,
         history: list[dict[str, str]] | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Yield answer tokens followed by the retrieved source passages."""
         if not isinstance(question, str) or not question.strip():
             raise ValueError("question must be a non-empty string")
         clean_question = question.strip()
+        greeting = _greeting_response(clean_question) if image is None and not web_search else None
+        if greeting is not None:
+            yield {"type": "token", "content": greeting}
+            yield {"type": "sources", "sources": []}
+            return
         if web_search:
             yield {"type": "status", "message": "Searching the web..."}
-        passages = self._retrieve(clean_question) if use_notes else []
+        passages = self._retrieve(clean_question, selected_sources=selected_sources) if use_notes else []
         if web_search:
             passages.extend(self.web_searcher.search(clean_question))
         if image is not None:

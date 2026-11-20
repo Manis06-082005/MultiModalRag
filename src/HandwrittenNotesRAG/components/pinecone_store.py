@@ -115,13 +115,18 @@ class PineconeStore:
             self,
             query_vector: list[float],
             top_k: int = 5,
+            sources: list[str] | None = None,
     ) -> list[dict]:
             try:
+                query_options: dict[str, Any] = {}
+                if sources is not None:
+                    query_options["filter"] = {"source": {"$in": list(sources)}}
                 results = self.index.query(
                     vector=query_vector,
                     top_k=top_k,
                     namespace=self.namespace,
-                    include_metadata=True
+                    include_metadata=True,
+                    **query_options,
                 )
                 matches = []
 
@@ -139,18 +144,22 @@ class PineconeStore:
                 Logger.error("Pinecone search failed", exc_info=True)
                 raise CustomException(error) from error
 
-    def search_bm25(self, query: str, top_k: int = 5) -> list[dict]:
+    def search_bm25(self, query: str, top_k: int = 5, sources: list[str] | None = None) -> list[dict]:
         try:
             if not self.supports_sparse:
                 return []
             encoded_query = self.bm25_encoder.encode_queries(query)
             sparse_query = cast(dict[str, Any], encoded_query)
+            query_options: dict[str, Any] = {}
+            if sources is not None:
+                query_options["filter"] = {"source": {"$in": list(sources)}}
             results = self.index.query(
                 vector=[0.0] * 384,
                 sparse_vector=sparse_query,
                 top_k=top_k,
                 namespace=self.namespace,
                 include_metadata=True,
+                **query_options,
             )
             return [
                 {

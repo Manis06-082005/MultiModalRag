@@ -1,3 +1,6 @@
+from collections.abc import Sequence
+
+
 class Retriever:
     """Combine dense and BM25 result rankings with reciprocal rank fusion."""
 
@@ -9,16 +12,26 @@ class Retriever:
         self.top_k = top_k
         self.rrf_k = rrf_k
 
-    def search(self, query: str) -> list[dict]:
+    def search(self, query: str, selected_sources: Sequence[str] | None = None) -> list[dict]:
         if not query or not query.strip():
+            return []
+        if selected_sources is not None and not selected_sources:
             return []
 
         candidate_k = self.top_k * 3
-        semantic_results = self.vector_store.search_embeddings(
-            query_vector=self.embedding_model.embed_query(query),
-            top_k=candidate_k,
-        )
-        bm25_results = self.vector_store.search_bm25(query, top_k=candidate_k)
+        if selected_sources is None:
+            semantic_results = self.vector_store.search_embeddings(
+                query_vector=self.embedding_model.embed_query(query),
+                top_k=candidate_k,
+            )
+            bm25_results = self.vector_store.search_bm25(query, top_k=candidate_k)
+        else:
+            semantic_results = self.vector_store.search_embeddings(
+                query_vector=self.embedding_model.embed_query(query),
+                top_k=candidate_k,
+                sources=selected_sources,
+            )
+            bm25_results = self.vector_store.search_bm25(query, top_k=candidate_k, sources=selected_sources)
 
         fused = {}
         for results in (semantic_results, bm25_results):
@@ -32,5 +45,5 @@ class Retriever:
             : self.top_k
         ]
 
-    def retrieve(self, query: str) -> list[dict]:
-        return self.search(query)
+    def retrieve(self, query: str, selected_sources: Sequence[str] | None = None) -> list[dict]:
+        return self.search(query, selected_sources=selected_sources)
